@@ -1,0 +1,11 @@
+POSTGRES_DB=jotpop_db
+POSTGRES_USER=jotpop_user
+POSTGRES_PASSWORD=jotpop_password
+
+DATABASE_URL=postgresql+psycopg2://jotpop_user:jotpop_password@db:5432/jotpop_db
+
+BACKEND_PORT=8000
+FRONTEND_PORT=5173
+
+JWT_SECRET_KEY=change_this_later
+JWT_ALGORITHM=HS256

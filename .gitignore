@@ -1,0 +1,34 @@
+# JotPop local secrets
+.env
+.env.*.local
+*.local
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+
+# Node / Vite
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Docker / local db
+*.sqlite3
+*.db
+postgres_data/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
+
+# Generated zips / temp files
+*.zip

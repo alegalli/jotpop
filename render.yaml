@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: jotpop-api
+    runtime: docker
+    rootDir: backend
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: jotpop-db
+          property: connectionString
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: DEV_USER_EMAILS
+        value: ale@example.com
+      # After Vercel deploys the frontend, set this to the exact frontend URL.
+      # Example: https://jotpop.vercel.app
+      - key: FRONTEND_ALLOWED_ORIGINS
+        sync: false
+
+databases:
+  - name: jotpop-db

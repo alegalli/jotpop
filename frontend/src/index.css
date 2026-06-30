@@ -1,0 +1,703 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #09090b;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at 20% 0%, rgba(34, 211, 238, 0.16), transparent 32rem),
+    radial-gradient(circle at 85% 18%, rgba(249, 115, 22, 0.11), transparent 28rem),
+    radial-gradient(circle at 50% 100%, rgba(139, 92, 246, 0.13), transparent 32rem),
+    #09090b;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+textarea,
+input {
+  font-size: 16px;
+}
+
+.app-shell {
+  background:
+    radial-gradient(circle at 50% -10%, rgba(34, 211, 238, 0.16), transparent 24rem),
+    radial-gradient(circle at 100% 18%, rgba(249, 115, 22, 0.12), transparent 22rem),
+    radial-gradient(circle at 10% 82%, rgba(139, 92, 246, 0.14), transparent 24rem),
+    #09090b;
+}
+
+.flame-pulse {
+  animation: flamePulse 1.35s ease-in-out infinite;
+}
+
+@keyframes flamePulse {
+  0%, 100% {
+    transform: translateY(-50%) scale(1);
+    filter: drop-shadow(0 0 0 rgba(251, 146, 60, 0));
+  }
+  50% {
+    transform: translateY(-50%) scale(1.13);
+    filter: drop-shadow(0 0 16px rgba(251, 146, 60, 0.55));
+  }
+}
+
+.forge-rail::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(251, 146, 60, 0.18), transparent);
+  transform: translateX(-100%);
+  animation: forgeSweep 2.4s linear infinite;
+}
+
+@keyframes forgeSweep {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+.ember-card {
+  box-shadow: 0 0 30px rgba(249, 115, 22, 0.14), inset 0 0 24px rgba(251, 146, 60, 0.08);
+}
+
+.impact-shake {
+  animation: impactShake 0.42s ease-out both;
+}
+
+@keyframes impactShake {
+  0% { transform: translate3d(0, 0, 0) scale(0.98); }
+  18% { transform: translate3d(-5px, 2px, 0) scale(1.01); }
+  36% { transform: translate3d(5px, -2px, 0) scale(1); }
+  55% { transform: translate3d(-2px, 1px, 0) scale(1); }
+  100% { transform: translate3d(0, 0, 0) scale(1); }
+}
+
+.spark {
+  position: absolute;
+  color: #fed7aa;
+  text-shadow: 0 0 14px rgba(251, 146, 60, 0.8);
+  animation: sparkFly 0.92s ease-out both;
+}
+
+.spark-one { left: 22%; top: 22%; animation-delay: 0.03s; }
+.spark-two { right: 19%; top: 30%; animation-delay: 0.08s; }
+.spark-three { left: 48%; bottom: 17%; animation-delay: 0.12s; }
+
+@keyframes sparkFly {
+  from { opacity: 0; transform: translateY(12px) scale(0.7); }
+  35% { opacity: 1; }
+  to { opacity: 0; transform: translateY(-22px) scale(1.25); }
+}
+
+.avatar-card {
+  position: relative;
+  height: 15rem;
+  max-width: 18rem;
+  border-radius: 2rem;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background:
+    radial-gradient(circle at 50% 30%, rgba(34, 211, 238, 0.22), transparent 5rem),
+    radial-gradient(circle at 50% 70%, rgba(139, 92, 246, 0.18), transparent 7rem),
+    linear-gradient(180deg, rgba(24, 24, 27, 0.96), rgba(0, 0, 0, 0.9));
+  box-shadow: inset 0 0 48px rgba(34, 211, 238, 0.06), 0 22px 70px rgba(0,0,0,0.35);
+}
+
+.avatar-aura {
+  position: absolute;
+  inset: 2.5rem 4.5rem 1.5rem;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.22), transparent 68%);
+  filter: blur(10px);
+}
+
+.avatar-hood {
+  position: absolute;
+  left: 50%;
+  top: 2.3rem;
+  width: 5.7rem;
+  height: 5.2rem;
+  transform: translateX(-50%);
+  border-radius: 55% 55% 42% 42%;
+  background: linear-gradient(145deg, #111827, #020617 72%);
+  border: 1px solid rgba(34, 211, 238, 0.14);
+  box-shadow: inset 0 -18px 22px rgba(0, 0, 0, 0.55), 0 0 28px rgba(34, 211, 238, 0.12);
+}
+
+.avatar-hood::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 2.35rem;
+  width: 3rem;
+  height: 1rem;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.72);
+  box-shadow: 0 0 12px rgba(34, 211, 238, 0.16);
+}
+
+.avatar-body {
+  position: absolute;
+  left: 50%;
+  bottom: 1.25rem;
+  width: 9rem;
+  height: 7rem;
+  transform: translateX(-50%);
+  clip-path: polygon(50% 0, 86% 22%, 100% 100%, 0 100%, 14% 22%);
+  background: linear-gradient(150deg, #18181b, #020617 72%);
+  border: 1px solid rgba(139, 92, 246, 0.12);
+}
+
+.avatar-line {
+  position: absolute;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(34, 211, 238, 0.7), transparent);
+  filter: drop-shadow(0 0 8px rgba(34, 211, 238, 0.35));
+}
+
+.line-a { left: 30%; top: 55%; width: 40%; transform: rotate(90deg); }
+.line-b { left: 26%; top: 68%; width: 48%; transform: rotate(-12deg); }
+
+.forge-hero-glow {
+  position: absolute;
+  inset: -35% -20% auto;
+  height: 13rem;
+  background: radial-gradient(circle, rgba(251, 146, 60, 0.2), transparent 68%);
+  filter: blur(14px);
+  pointer-events: none;
+}
+
+.forge-core {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 4.25rem;
+  height: 4.25rem;
+  flex: 0 0 auto;
+  border-radius: 1.45rem;
+  border: 1px solid rgba(251, 146, 60, 0.26);
+  background:
+    radial-gradient(circle at 50% 45%, rgba(251, 146, 60, 0.22), transparent 58%),
+    linear-gradient(145deg, rgba(39, 39, 42, 0.95), rgba(2, 6, 23, 0.96));
+  box-shadow: inset 0 0 24px rgba(251, 146, 60, 0.08), 0 12px 38px rgba(0, 0, 0, 0.38);
+}
+
+.forge-core-lit {
+  border-color: rgba(253, 186, 116, 0.48);
+  box-shadow:
+    inset 0 0 28px rgba(251, 146, 60, 0.16),
+    0 0 36px rgba(249, 115, 22, 0.22),
+    0 18px 50px rgba(0, 0, 0, 0.42);
+}
+
+
+/* Step 21 — Forge Animation Ritual */
+.promise-forge-card {
+  will-change: transform, box-shadow, border-color;
+}
+
+.promise-forge-card-lit {
+  box-shadow:
+    0 0 34px rgba(249, 115, 22, 0.16),
+    inset 0 0 28px rgba(251, 146, 60, 0.09);
+}
+
+.forge-card-flare {
+  position: absolute;
+  inset: -40% -25% auto;
+  height: 12rem;
+  background: radial-gradient(circle, rgba(251, 146, 60, 0.22), transparent 68%);
+  filter: blur(18px);
+  opacity: 0;
+  transition: opacity 260ms ease;
+  pointer-events: none;
+}
+
+.promise-forge-card-lit .forge-card-flare {
+  opacity: 1;
+}
+
+.ritual-rail {
+  min-height: 4.5rem;
+  box-shadow: inset 0 0 22px rgba(251, 146, 60, 0.08);
+}
+
+.forge-rail-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(90deg, rgba(249, 115, 22, 0.12), rgba(251, 191, 36, 0.22), rgba(254, 215, 170, 0.2));
+  transition: width 180ms ease;
+  box-shadow: 0 0 24px rgba(249, 115, 22, 0.18);
+}
+
+.forge-rail-embers {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 20% 50%, rgba(251, 146, 60, 0.16), transparent 1rem),
+    radial-gradient(circle at 55% 40%, rgba(253, 186, 116, 0.12), transparent 1.4rem),
+    radial-gradient(circle at 82% 60%, rgba(251, 191, 36, 0.14), transparent 1rem);
+  opacity: 0.65;
+  animation: emberBreath 1.8s ease-in-out infinite;
+}
+
+@keyframes emberBreath {
+  0%, 100% { opacity: 0.42; transform: scale(1); }
+  50% { opacity: 0.9; transform: scale(1.02); }
+}
+
+.forge-impact-target {
+  position: absolute;
+  right: 0.7rem;
+  top: 0.7rem;
+  display: grid;
+  place-items: center;
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(253, 186, 116, 0.22);
+  background: rgba(0, 0, 0, 0.23);
+  box-shadow: inset 0 0 18px rgba(251, 146, 60, 0.08);
+}
+
+.ritual-impact .forge-impact-target {
+  animation: impactGlow 0.7s ease-out both;
+}
+
+@keyframes impactGlow {
+  0% { box-shadow: inset 0 0 18px rgba(251, 146, 60, 0.08), 0 0 0 rgba(251, 146, 60, 0); }
+  30% { box-shadow: inset 0 0 26px rgba(251, 146, 60, 0.24), 0 0 42px rgba(251, 146, 60, 0.5); transform: scale(1.08); }
+  100% { box-shadow: inset 0 0 20px rgba(251, 146, 60, 0.1), 0 0 14px rgba(251, 146, 60, 0.1); transform: scale(1); }
+}
+
+.forge-hammer {
+  z-index: 6;
+}
+
+.forge-spark {
+  position: absolute;
+  color: #fed7aa;
+  text-shadow: 0 0 16px rgba(251, 146, 60, 0.95);
+  animation: forgeSparkBurst 0.95s ease-out both;
+}
+
+.forge-spark-a { right: 18%; top: 38%; animation-delay: 0.34s; }
+.forge-spark-b { right: 24%; top: 24%; animation-delay: 0.38s; }
+.forge-spark-c { right: 31%; top: 53%; animation-delay: 0.41s; }
+.forge-spark-d { right: 16%; top: 60%; animation-delay: 0.43s; }
+.forge-spark-e { right: 36%; top: 32%; animation-delay: 0.46s; }
+
+@keyframes forgeSparkBurst {
+  0% { opacity: 0; transform: translate3d(0, 10px, 0) scale(0.55) rotate(0deg); }
+  20% { opacity: 1; }
+  100% { opacity: 0; transform: translate3d(-28px, -34px, 0) scale(1.4) rotate(24deg); }
+}
+
+.forged-flame {
+  display: inline-block;
+  animation: forgedFlame 1.25s ease-in-out infinite;
+  filter: drop-shadow(0 0 14px rgba(251, 146, 60, 0.5));
+}
+
+@keyframes forgedFlame {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-2px) scale(1.12); }
+}
+
+.forge-toast {
+  overflow: hidden;
+}
+
+.forge-toast::before {
+  content: "";
+  position: absolute;
+  inset: -30% -20% auto;
+  height: 12rem;
+  background: radial-gradient(circle, rgba(251, 146, 60, 0.24), transparent 68%);
+  filter: blur(16px);
+  pointer-events: none;
+}
+
+.toast-flame {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 1.45rem;
+  border: 1px solid rgba(253, 186, 116, 0.36);
+  background: radial-gradient(circle, rgba(251, 146, 60, 0.2), rgba(0, 0, 0, 0.35));
+  font-size: 2rem;
+  animation: toastFlameRise 1.05s ease-in-out infinite;
+}
+
+@keyframes toastFlameRise {
+  0%, 100% { transform: translateY(0) scale(1); filter: drop-shadow(0 0 8px rgba(251, 146, 60, 0.25)); }
+  50% { transform: translateY(-3px) scale(1.08); filter: drop-shadow(0 0 22px rgba(251, 146, 60, 0.7)); }
+}
+
+.spark-four { right: 42%; bottom: 20%; animation-delay: 0.18s; }
+
+/* Step 22 — Evolution V2: Avatar + Pattern Map + Follow-through */
+.evolution-hero-glow {
+  position: absolute;
+  inset: -30% -20% auto;
+  height: 15rem;
+  background:
+    radial-gradient(circle at 38% 45%, rgba(34, 211, 238, 0.22), transparent 60%),
+    radial-gradient(circle at 70% 42%, rgba(139, 92, 246, 0.18), transparent 62%);
+  filter: blur(18px);
+  pointer-events: none;
+}
+
+.avatar-evolved {
+  height: 18rem;
+  max-width: 20rem;
+  border-color: rgba(103, 232, 249, 0.16);
+  background:
+    radial-gradient(circle at 50% 24%, rgba(34, 211, 238, 0.28), transparent 5rem),
+    radial-gradient(circle at 55% 82%, rgba(249, 115, 22, 0.12), transparent 6.5rem),
+    radial-gradient(circle at 25% 72%, rgba(139, 92, 246, 0.17), transparent 7.5rem),
+    linear-gradient(180deg, rgba(24, 24, 27, 0.98), rgba(2, 6, 23, 0.96));
+}
+
+.avatar-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+  background-size: 24px 24px;
+  mask-image: radial-gradient(circle at 50% 45%, black, transparent 74%);
+}
+
+.avatar-evolved .avatar-aura {
+  inset: 2.15rem 3.3rem 1rem;
+  background:
+    radial-gradient(circle, rgba(34, 211, 238, 0.24), transparent 54%),
+    radial-gradient(circle at 50% 78%, rgba(251, 146, 60, 0.14), transparent 66%);
+  animation: avatarAuraBreathe 2.8s ease-in-out infinite;
+}
+
+@keyframes avatarAuraBreathe {
+  0%, 100% { opacity: 0.72; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.04); }
+}
+
+.avatar-ring {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  width: 9.2rem;
+  height: 9.2rem;
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(34, 211, 238, 0.16);
+  box-shadow:
+    0 0 32px rgba(34, 211, 238, 0.12),
+    inset 0 0 28px rgba(139, 92, 246, 0.08);
+}
+
+.avatar-face-glow {
+  position: absolute;
+  left: 50%;
+  top: 4.55rem;
+  width: 2.6rem;
+  height: 0.22rem;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: rgba(103, 232, 249, 0.78);
+  box-shadow: 0 0 18px rgba(103, 232, 249, 0.72);
+}
+
+.avatar-cloak-left,
+.avatar-cloak-right {
+  position: absolute;
+  bottom: 1.05rem;
+  width: 4rem;
+  height: 6.6rem;
+  background: linear-gradient(160deg, rgba(15, 23, 42, 0.98), rgba(2, 6, 23, 0.82));
+  border: 1px solid rgba(255,255,255,0.06);
+  filter: drop-shadow(0 16px 26px rgba(0,0,0,0.35));
+}
+
+.avatar-cloak-left {
+  left: 4.4rem;
+  clip-path: polygon(54% 0, 100% 100%, 0 100%, 22% 18%);
+}
+
+.avatar-cloak-right {
+  right: 4.4rem;
+  clip-path: polygon(46% 0, 78% 18%, 100% 100%, 0 100%);
+}
+
+.avatar-glyph-slot {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(103, 232, 249, 0.22);
+  background: rgba(2, 6, 23, 0.72);
+  color: #cffafe;
+  box-shadow: inset 0 0 18px rgba(34, 211, 238, 0.08), 0 0 18px rgba(34, 211, 238, 0.12);
+}
+
+.slot-one { left: 3.1rem; top: 3.3rem; }
+.slot-two { right: 3.1rem; top: 3.3rem; }
+
+.avatar-follow-sparking .avatar-ring,
+.avatar-follow-forming .avatar-ring,
+.avatar-follow-steady .avatar-ring,
+.avatar-follow-forged .avatar-ring {
+  border-color: rgba(251, 146, 60, 0.28);
+  box-shadow: 0 0 38px rgba(251, 146, 60, 0.16), inset 0 0 32px rgba(34, 211, 238, 0.1);
+}
+
+.avatar-follow-steady .avatar-face-glow,
+.avatar-follow-forged .avatar-face-glow {
+  background: rgba(254, 215, 170, 0.88);
+  box-shadow: 0 0 22px rgba(251, 146, 60, 0.82);
+}
+
+.pattern-map-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.7rem;
+  border: 1px solid rgba(255,255,255,0.08);
+  background:
+    radial-gradient(circle at 50% 45%, rgba(34, 211, 238, 0.08), transparent 60%),
+    rgba(0, 0, 0, 0.18);
+  padding: 0.6rem 0.2rem;
+}
+
+.pattern-axis-label {
+  fill: rgba(226, 232, 240, 0.82);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.pattern-node {
+  filter: drop-shadow(0 0 8px rgba(103, 232, 249, 0.7));
+}
+
+.follow-ring {
+  --follow-angle: 0deg;
+  width: 6.6rem;
+  height: 6.6rem;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background:
+    conic-gradient(from -90deg, rgba(251, 146, 60, 0.95) var(--follow-angle), rgba(255,255,255,0.08) var(--follow-angle) 360deg);
+  box-shadow: 0 0 34px rgba(249, 115, 22, 0.13);
+}
+
+.follow-ring-inner {
+  display: grid;
+  place-items: center;
+  width: 5rem;
+  height: 5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.09);
+  background: rgba(9, 9, 11, 0.92);
+  text-align: center;
+}
+
+.follow-ring-inner span {
+  max-width: 4.2rem;
+  font-size: 0.72rem;
+  line-height: 0.9rem;
+  font-weight: 900;
+  color: #fed7aa;
+}
+
+/* Step 23 — Character language, clearer avatar growth, stale Forge cooling */
+.avatar-evolved {
+  height: 17rem;
+  background:
+    radial-gradient(circle at 50% 22%, rgba(103, 232, 249, 0.32), transparent 5.5rem),
+    radial-gradient(circle at 52% 72%, rgba(251, 146, 60, 0.16), transparent 6.8rem),
+    radial-gradient(circle at 20% 76%, rgba(139, 92, 246, 0.2), transparent 7.5rem),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(2, 6, 23, 0.98));
+}
+
+.avatar-card > * {
+  pointer-events: none;
+}
+
+.avatar-grid { z-index: 0; }
+.avatar-aura { z-index: 1; }
+.avatar-ring { z-index: 2; }
+.avatar-back-sigil { z-index: 2; }
+.avatar-body,
+.avatar-cloak-left,
+.avatar-cloak-right { z-index: 3; }
+.avatar-hood { z-index: 5; }
+.avatar-face-glow,
+.avatar-line,
+.avatar-glyph-slot,
+.avatar-stage-badge { z-index: 8; }
+
+.avatar-back-sigil {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  transform: translate(-50%, -50%);
+  color: rgba(103, 232, 249, 0.16);
+  font-size: 8rem;
+  line-height: 1;
+  text-shadow: 0 0 34px rgba(34, 211, 238, 0.22);
+}
+
+.avatar-hood {
+  top: 2.05rem;
+  width: 6.35rem;
+  height: 5.85rem;
+  background:
+    radial-gradient(circle at 50% 56%, rgba(34, 211, 238, 0.09), transparent 36%),
+    linear-gradient(145deg, #1e293b 0%, #0f172a 34%, #020617 78%);
+  border-color: rgba(103, 232, 249, 0.34);
+  box-shadow:
+    inset 0 -20px 24px rgba(0, 0, 0, 0.68),
+    0 0 34px rgba(34, 211, 238, 0.2),
+    0 18px 36px rgba(0, 0, 0, 0.46);
+}
+
+.avatar-hood::before {
+  content: "";
+  position: absolute;
+  inset: 0.42rem 0.62rem 1.15rem;
+  border-radius: 54% 54% 42% 42%;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom-color: rgba(103, 232, 249, 0.16);
+}
+
+.avatar-hood::after {
+  top: 2.72rem;
+  width: 3.2rem;
+  height: 0.9rem;
+  background: rgba(0, 0, 0, 0.82);
+  box-shadow:
+    0 0 18px rgba(34, 211, 238, 0.28),
+    inset 0 -1px 0 rgba(103, 232, 249, 0.24);
+}
+
+.avatar-face-glow {
+  top: 4.72rem;
+  width: 2.4rem;
+  height: 0.26rem;
+}
+
+.avatar-body {
+  bottom: 1.18rem;
+  width: 9.8rem;
+  height: 7.4rem;
+  background:
+    linear-gradient(155deg, rgba(30, 41, 59, 0.98), rgba(2, 6, 23, 0.95) 72%),
+    radial-gradient(circle at 50% 16%, rgba(103, 232, 249, 0.1), transparent 45%);
+  border: 1px solid rgba(103, 232, 249, 0.16);
+  box-shadow: inset 0 0 24px rgba(34, 211, 238, 0.06), 0 18px 42px rgba(0,0,0,0.4);
+}
+
+.avatar-cloak-left,
+.avatar-cloak-right {
+  bottom: 1rem;
+  height: 7rem;
+  background: linear-gradient(160deg, rgba(30, 41, 59, 0.98), rgba(2, 6, 23, 0.88));
+  border-color: rgba(103, 232, 249, 0.11);
+}
+
+.avatar-cloak-left { left: 4rem; }
+.avatar-cloak-right { right: 4rem; }
+
+.line-a {
+  left: 45%;
+  top: 47%;
+  width: 10%;
+  height: 2px;
+  transform: rotate(90deg);
+  opacity: 0.62;
+}
+
+.line-b {
+  left: 29%;
+  top: 69%;
+  width: 42%;
+  height: 2px;
+  opacity: 0.4;
+}
+
+.avatar-stage-badge {
+  position: absolute;
+  left: 50%;
+  bottom: 0.8rem;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(0,0,0,0.42);
+  padding: 0.35rem 0.65rem;
+  color: rgba(226, 232, 240, 0.86);
+  font-size: 0.58rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  backdrop-filter: blur(10px);
+}
+
+.avatar-stage-0 .avatar-glyph-slot,
+.avatar-stage-0 .avatar-ring,
+.avatar-stage-0 .avatar-face-glow {
+  opacity: 0.45;
+}
+
+.avatar-stage-3 .avatar-cloak-left,
+.avatar-stage-3 .avatar-cloak-right,
+.avatar-stage-4 .avatar-cloak-left,
+.avatar-stage-4 .avatar-cloak-right,
+.avatar-stage-5 .avatar-cloak-left,
+.avatar-stage-5 .avatar-cloak-right,
+.avatar-stage-6 .avatar-cloak-left,
+.avatar-stage-6 .avatar-cloak-right {
+  box-shadow: 0 0 24px rgba(249, 115, 22, 0.12);
+}
+
+.avatar-cooling .avatar-aura,
+.avatar-cooling .avatar-ring {
+  opacity: 0.62;
+  filter: saturate(0.7);
+}
+
+.avatar-cooling .avatar-face-glow {
+  background: rgba(148, 163, 184, 0.75);
+  box-shadow: 0 0 16px rgba(148, 163, 184, 0.45);
+}
+
+details summary::-webkit-details-marker {
+  display: none;
+}

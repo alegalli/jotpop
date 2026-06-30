@@ -1,0 +1,42 @@
+# Demo-oriented Docker Compose file.
+# This is still a simple MVP deployment shape, not a hardened production setup.
+# Use it for controlled demos or a small private MVP test.
+
+services:
+  db:
+    image: postgres:16
+    container_name: jotpop-db-demo
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - jotpop_postgres_demo_data:/var/lib/postgresql/data
+
+  backend:
+    build:
+      context: ./backend
+    container_name: jotpop-backend-demo
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "${BACKEND_PORT}:8000"
+    depends_on:
+      - db
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: jotpop-frontend-demo
+    restart: unless-stopped
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://127.0.0.1:8000}
+    ports:
+      - "${FRONTEND_PORT}:5173"
+    depends_on:
+      - backend
+
+volumes:
+  jotpop_postgres_demo_data:
