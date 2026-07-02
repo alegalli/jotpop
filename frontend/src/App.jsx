@@ -11,7 +11,7 @@ const SIGNALS_IMPORTED_PREFIX = "jotpop_signals_imported_user_";
 const STEP26_QA_KEY = "jotpop_step26_manual_qa";
 
 const STEP26_QA_ITEMS = [
-  { id: "auth", title: "Sign in", hint: "ale@example.com logs in and lands on Feed." },
+  { id: "auth", title: "Sign in", hint: "Login works and lands on Feed." },
   { id: "feed_stack", title: "Feed stack", hint: "Full-screen mobile card plus cards behind it are visible." },
   { id: "feed_gestures", title: "Feed gestures", hint: "Whole-card right/left chooses, up skips, down goes previous." },
   { id: "micro_jot", title: "Micro-Jot", hint: "Empty right swipe shakes; empty upward swipe skips; written Jot saves." },
@@ -172,6 +172,7 @@ const ROUTE_TO_TAB = {
   "/minday": "minday",
   "/done": "done",
   "/plan": "plan",
+  "/security": "security",
 };
 
 const TAB_TO_ROUTE = {
@@ -183,6 +184,7 @@ const TAB_TO_ROUTE = {
   minday: "/minday",
   done: "/done",
   plan: "/plan",
+  security: "/security",
 };
 
 const DAILY_OS_TABS = ["doittoday", "minday", "done", "plan"];
@@ -219,6 +221,9 @@ export default function App() {
   const [authMode, setAuthMode] = useState(null);
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState("");
+  const [securityLoading, setSecurityLoading] = useState(false);
+  const [securityMessage, setSecurityMessage] = useState("");
+  const [securityError, setSecurityError] = useState("");
 
   const [onboardingCards, setOnboardingCards] = useState([]);
   const [feedCards, setFeedCards] = useState([]);
@@ -299,6 +304,8 @@ export default function App() {
       setDailyOsError("");
       setDailyOsQa(null);
       setDailyOsQaError("");
+      setSecurityMessage("");
+      setSecurityError("");
       setTodayPromises(null);
       setPromiseSuggestions([]);
       return;
@@ -635,6 +642,26 @@ export default function App() {
     }
   }
 
+  async function handleChangePassword({ currentPassword, newPassword }) {
+    if (!token) return;
+    setSecurityLoading(true);
+    setSecurityMessage("");
+    setSecurityError("");
+    try {
+      await axios.post(
+        `${API_BASE_URL}/auth/change-password`,
+        { current_password: currentPassword, new_password: newPassword },
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      setSecurityMessage("Password changed. Use the new password next time you sign in.");
+      navigator.vibrate?.(35);
+    } catch (error) {
+      setSecurityError(parseApiError(error, "Could not change password."));
+    } finally {
+      setSecurityLoading(false);
+    }
+  }
+
   function logout() {
     localStorage.removeItem(AUTH_TOKEN_KEY);
     setToken("");
@@ -821,6 +848,16 @@ export default function App() {
                   error={dailyOsError}
                   token={token}
                   onRefresh={() => fetchDailyOsStatus(token)}
+                />
+              ) : null}
+
+              {activeTab === "security" ? (
+                <SecurityPage
+                  user={currentUser}
+                  loading={securityLoading}
+                  message={securityMessage}
+                  error={securityError}
+                  onChangePassword={handleChangePassword}
                 />
               ) : null}
 
@@ -2456,6 +2493,11 @@ function SideMenu({ open, activeTab, isDev, onClose, onNavigate, onLogout }) {
               {dailyItems.map((item) => <SideMenuItem key={item.id} item={item} active={activeTab === item.id} onClick={() => onNavigate(item.id)} />)}
             </div>
 
+            <p className="mt-6 text-[10px] uppercase tracking-[0.24em] text-zinc-500">Account</p>
+            <div className="mt-3 grid gap-2">
+              <SideMenuItem item={{ id: "security", label: "Security", body: "Change your password.", icon: "⌁" }} active={activeTab === "security"} onClick={() => onNavigate("security")} />
+            </div>
+
             {isDev ? (
               <button onClick={() => onNavigate("dev")} className="mt-5 w-full rounded-2xl border border-cyan-300/20 bg-cyan-400/10 px-4 py-3 text-left text-sm font-black text-cyan-100 active:scale-[0.98]">
                 Dev tools
@@ -3739,11 +3781,66 @@ function OnboardingGate({ acceptedSignals, totalSignals, onRestart, onCreateAcco
   );
 }
 
+
+function SecurityPage({ user, loading, message, error, onChangePassword }) {
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [localError, setLocalError] = useState("");
+
+  function submit(event) {
+    event.preventDefault();
+    setLocalError("");
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setLocalError("Fill in all password fields.");
+      return;
+    }
+    if (newPassword.length < 8) {
+      setLocalError("New password must be at least 8 characters.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setLocalError("New password and confirmation do not match.");
+      return;
+    }
+    onChangePassword?.({ currentPassword, newPassword });
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+  }
+
+  return (
+    <section className="grid gap-4">
+      <PageTitle eyebrow="Account" title="Security" body="Change your password quickly. Keep the deployed account private." />
+      <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.045] p-4 shadow-2xl shadow-black/20">
+        <p className="text-[10px] uppercase tracking-[0.24em] text-zinc-500">Signed in as</p>
+        <p className="mt-2 text-sm font-bold text-zinc-200">{user?.email || "Your account"}</p>
+      </div>
+      <form onSubmit={submit} className="rounded-[1.75rem] border border-cyan-300/15 bg-gradient-to-br from-cyan-500/10 via-zinc-950 to-violet-500/10 p-4">
+        <p className="text-xs uppercase tracking-[0.24em] text-cyan-200/80">Password</p>
+        <h2 className="mt-2 text-2xl font-black">Change password.</h2>
+        <div className="mt-5 grid gap-3">
+          <Input label="Current password" value={currentPassword} onChange={setCurrentPassword} type="password" />
+          <Input label="New password" value={newPassword} onChange={setNewPassword} type="password" />
+          <Input label="Confirm new password" value={confirmPassword} onChange={setConfirmPassword} type="password" />
+        </div>
+        {localError ? <Notice tone="error">{localError}</Notice> : null}
+        {error ? <Notice tone="error">{error}</Notice> : null}
+        {message ? <Notice tone="success">{message}</Notice> : null}
+        <button type="submit" disabled={loading} className="mt-5 w-full rounded-2xl bg-white px-4 py-4 font-black text-zinc-950 active:scale-[0.98] disabled:opacity-60">
+          {loading ? "Changing..." : "Change password"}
+        </button>
+      </form>
+      <p className="px-1 text-xs leading-5 text-zinc-500">Security note: changing the password does not publish any credentials in the UI. Sign out and sign in again with the new password after redeploying if you want to verify it.</p>
+    </section>
+  );
+}
+
 function AuthModal({ mode, onClose, onSwitchMode, onSubmit, loading, error }) {
-  const [email, setEmail] = useState("ale@example.com");
-  const [password, setPassword] = useState("password123");
-  const [username, setUsername] = useState("ale");
-  const [displayName, setDisplayName] = useState("Ale");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [username, setUsername] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const isRegister = mode === "register";
 
   function submit(event) {
