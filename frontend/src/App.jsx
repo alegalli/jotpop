@@ -163,13 +163,59 @@ function prepareFeedDeck(cards) {
   return buildNoTripleDeck(mixed);
 }
 
+const ROUTE_TO_TAB = {
+  "/": "feed",
+  "/feed": "feed",
+  "/forge": "forge",
+  "/evolution": "evolution",
+  "/doittoday": "doittoday",
+  "/minday": "minday",
+  "/done": "done",
+  "/plan": "plan",
+};
+
+const TAB_TO_ROUTE = {
+  feed: "/",
+  forge: "/forge",
+  evolution: "/evolution",
+  dev: "/evolution",
+  doittoday: "/doittoday",
+  minday: "/minday",
+  done: "/done",
+  plan: "/plan",
+};
+
+const DAILY_OS_TABS = ["doittoday", "minday", "done", "plan"];
+
+function tabFromPath(pathname = window.location.pathname) {
+  const normalized = pathname.replace(/\/$/, "") || "/";
+  return ROUTE_TO_TAB[normalized] || "feed";
+}
+
+function routeForTab(tab) {
+  return TAB_TO_ROUTE[tab] || "/";
+}
+
+function isDailyOsTab(tab) {
+  return DAILY_OS_TABS.includes(tab);
+}
+
+function getBrowserTimezone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
+}
+
 
 export default function App() {
   const [apiStatus, setApiStatus] = useState("checking");
   const [apiVersion, setApiVersion] = useState("");
   const [token, setToken] = useState(() => getStoredToken());
   const [currentUser, setCurrentUser] = useState(null);
-  const [activeTab, setActiveTab] = useState("feed");
+  const [activeTab, setActiveTab] = useState(() => tabFromPath());
+  const [sideMenuOpen, setSideMenuOpen] = useState(false);
   const [authMode, setAuthMode] = useState(null);
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState("");
@@ -211,6 +257,13 @@ export default function App() {
   const [devSmokeLoading, setDevSmokeLoading] = useState(false);
   const [devSmokeError, setDevSmokeError] = useState("");
 
+  const [dailyOsStatus, setDailyOsStatus] = useState(null);
+  const [dailyOsLoading, setDailyOsLoading] = useState(false);
+  const [dailyOsError, setDailyOsError] = useState("");
+  const [dailyOsQa, setDailyOsQa] = useState(null);
+  const [dailyOsQaLoading, setDailyOsQaLoading] = useState(false);
+  const [dailyOsQaError, setDailyOsQaError] = useState("");
+
   const isLoggedIn = Boolean(token && currentUser);
   const isDev = Boolean(currentUser?.is_dev);
   const character = currentUser?.active_character || null;
@@ -224,6 +277,15 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    function handlePopState() {
+      setActiveTab(tabFromPath());
+      setSideMenuOpen(false);
+    }
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  useEffect(() => {
     if (!token) {
       setCurrentUser(null);
       setInsightStatus(null);
@@ -233,6 +295,10 @@ export default function App() {
       setDevError("");
       setDevSmoke(null);
       setDevSmokeError("");
+      setDailyOsStatus(null);
+      setDailyOsError("");
+      setDailyOsQa(null);
+      setDailyOsQaError("");
       setTodayPromises(null);
       setPromiseSuggestions([]);
       return;
@@ -250,6 +316,11 @@ export default function App() {
     fetchDevStatus(token);
     fetchDevSmoke(token);
   }, [token, isDev, activeTab]);
+
+  useEffect(() => {
+    if (!token || !isDailyOsTab(activeTab)) return;
+    fetchDailyOsStatus(token);
+  }, [token, activeTab]);
 
   useEffect(() => {
     if (!token || !currentUser?.id || tempSignals.length === 0) return;
@@ -414,6 +485,45 @@ export default function App() {
     }
   }
 
+
+  async function fetchDailyOsStatus(activeToken = token) {
+    if (!activeToken) return;
+    setDailyOsLoading(true);
+    setDailyOsError("");
+    try {
+      const timezone = encodeURIComponent(getBrowserTimezone());
+      const response = await axios.get(`${API_BASE_URL}/daily-os/status?timezone=${timezone}`, {
+        headers: { Authorization: `Bearer ${activeToken}` },
+      });
+      setDailyOsStatus(response.data);
+    } catch (error) {
+      setDailyOsStatus(null);
+      setDailyOsError(parseApiError(error, "Could not load Daily OS."));
+    } finally {
+      setDailyOsLoading(false);
+    }
+  }
+
+  async function fetchDailyOsQa(activeToken = token) {
+    if (!activeToken) return;
+    setDailyOsQaLoading(true);
+    setDailyOsQaError("");
+    try {
+      const timezone = encodeURIComponent(getBrowserTimezone());
+      const response = await axios.get(`${API_BASE_URL}/daily-os/qa?timezone=${timezone}`, {
+        headers: { Authorization: `Bearer ${activeToken}` },
+      });
+      setDailyOsQa(response.data);
+      await fetchDailyOsStatus(activeToken);
+    } catch (error) {
+      setDailyOsQa(null);
+      setDailyOsQaError(parseApiError(error, "Could not run Daily OS QA."));
+    } finally {
+      setDailyOsQaLoading(false);
+    }
+  }
+
+
   async function importTemporarySignals(activeToken = token, userId = currentUser?.id) {
     const signals = getStoredSignals();
     if (!activeToken || !userId || signals.length === 0) return;
@@ -482,6 +592,16 @@ export default function App() {
     navigator.vibrate?.(18);
   }
 
+  function navigateTo(tab) {
+    const nextTab = tab || "feed";
+    setActiveTab(nextTab);
+    setSideMenuOpen(false);
+    const nextPath = routeForTab(nextTab);
+    if (window.location.pathname !== nextPath) {
+      window.history.pushState({}, "", nextPath);
+    }
+  }
+
   async function handleAuthSubmit(formValues) {
     setAuthLoading(true);
     setAuthError("");
@@ -501,7 +621,7 @@ export default function App() {
       localStorage.setItem(AUTH_TOKEN_KEY, accessToken);
       setToken(accessToken);
       setAuthMode(null);
-      setActiveTab("feed");
+      navigateTo("feed");
       await fetchCurrentUser(accessToken);
       await fetchPromiseData(accessToken);
       await fetchInsightStatus(accessToken);
@@ -520,7 +640,7 @@ export default function App() {
     setToken("");
     setCurrentUser(null);
     setAuthMode(null);
-    setActiveTab("feed");
+    navigateTo("feed");
     setFeedStatus("idle");
     setFeedMessage("");
     setJotSummary(null);
@@ -633,6 +753,7 @@ export default function App() {
             character={character}
             todayPromises={todayPromises}
             isDev={isDev}
+            onOpenMenu={() => setSideMenuOpen(true)}
             onOpenDev={() => setActiveTab("dev")}
             onLogout={logout}
           />
@@ -692,6 +813,17 @@ export default function App() {
                 />
               ) : null}
 
+              {isDailyOsTab(activeTab) ? (
+                <DailyOsPage
+                  pageKey={activeTab}
+                  status={dailyOsStatus}
+                  loading={dailyOsLoading}
+                  error={dailyOsError}
+                  token={token}
+                  onRefresh={() => fetchDailyOsStatus(token)}
+                />
+              ) : null}
+
               {activeTab === "dev" ? (
                 <DevToolsPage
                   status={devStatus}
@@ -700,14 +832,19 @@ export default function App() {
                   smoke={devSmoke}
                   smokeLoading={devSmokeLoading}
                   smokeError={devSmokeError}
+                  dailyOsQa={dailyOsQa}
+                  dailyOsQaLoading={dailyOsQaLoading}
+                  dailyOsQaError={dailyOsQaError}
                   isDev={isDev}
                   onRefresh={() => fetchDevStatus(token)}
                   onRunSmoke={() => fetchDevSmoke(token)}
-                  onBack={() => setActiveTab("evolution")}
+                  onRunDailyOsQa={() => fetchDailyOsQa(token)}
+                  onBack={() => navigateTo("evolution")}
                 />
               ) : null}
 
-              <BottomNavigation activeTab={activeTab} onChange={setActiveTab} />
+              <BottomNavigation activeTab={activeTab} onChange={navigateTo} />
+              <SideMenu open={sideMenuOpen} activeTab={activeTab} isDev={isDev} onClose={() => setSideMenuOpen(false)} onNavigate={navigateTo} onLogout={logout} />
               <ForgeToast toast={forgeToast} />
             </>
           ) : loadingCards ? (
@@ -773,7 +910,7 @@ function PreAuthHeader({ onSignIn, apiStatus }) {
   );
 }
 
-function TopStatusBar({ character, todayPromises, isDev, onOpenDev, onLogout }) {
+function TopStatusBar({ character, todayPromises, isDev, onOpenMenu, onOpenDev, onLogout }) {
   const accepted = character?.accepted_signal_count ?? 0;
   const forgeState = todayPromises?.forge_state || character?.forge_state || "Cold";
   const today = todayPromises?.alignment_percent ?? character?.today_alignment ?? 0;
@@ -793,6 +930,9 @@ function TopStatusBar({ character, todayPromises, isDev, onOpenDev, onLogout }) 
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
+            <button onClick={onOpenMenu} className="rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1.5 text-[10px] font-black text-zinc-200 active:scale-95">
+              Menu
+            </button>
             {isDev ? (
               <button onClick={onOpenDev} className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-2.5 py-1.5 text-[10px] font-black text-cyan-100 active:scale-95">
                 Dev
@@ -2275,12 +2415,1079 @@ function AchievementChip({ achievement, open, onToggle }) {
 }
 
 
-function DevToolsPage({ status, loading, error, smoke, smokeLoading, smokeError, isDev, onRefresh, onRunSmoke, onBack }) {
+
+function SideMenu({ open, activeTab, isDev, onClose, onNavigate, onLogout }) {
+  const primaryItems = [
+    { id: "feed", label: "Feed", body: "Signals waiting.", icon: "✦" },
+    { id: "forge", label: "Forge", body: "Three identity promises.", icon: "🔥" },
+    { id: "evolution", label: "Evolution", body: "What shape is emerging.", icon: "◇" },
+  ];
+  const dailyItems = [
+    { id: "doittoday", label: "Do it Today", body: "Today's practical moves.", icon: "✓" },
+    { id: "minday", label: "Minimum Day", body: "The baseline that appears automatically.", icon: "▾" },
+    { id: "done", label: "Done", body: "What actually happened.", icon: "●" },
+    { id: "plan", label: "Plan", body: "Tomorrow, next 7 days, later.", icon: "+" },
+  ];
+
+  return (
+    <AnimatePresence>
+      {open ? (
+        <motion.div className="fixed inset-0 z-[70] bg-black/70 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+          <motion.aside
+            initial={{ x: -28, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: -28, opacity: 0 }}
+            className="h-full w-[86%] max-w-sm border-r border-white/10 bg-zinc-950 p-4 pt-[calc(1rem+env(safe-area-inset-top))] shadow-2xl shadow-black/60"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.28em] text-cyan-200/70">JotPop</p>
+                <h2 className="mt-2 text-2xl font-black">Command menu.</h2>
+              </div>
+              <button onClick={onClose} className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-black text-zinc-300 active:scale-95">Close</button>
+            </div>
+
+            <div className="mt-6 grid gap-2">
+              {primaryItems.map((item) => <SideMenuItem key={item.id} item={item} active={activeTab === item.id} onClick={() => onNavigate(item.id)} />)}
+            </div>
+
+            <p className="mt-6 text-[10px] uppercase tracking-[0.24em] text-zinc-500">Daily OS</p>
+            <div className="mt-3 grid gap-2">
+              {dailyItems.map((item) => <SideMenuItem key={item.id} item={item} active={activeTab === item.id} onClick={() => onNavigate(item.id)} />)}
+            </div>
+
+            {isDev ? (
+              <button onClick={() => onNavigate("dev")} className="mt-5 w-full rounded-2xl border border-cyan-300/20 bg-cyan-400/10 px-4 py-3 text-left text-sm font-black text-cyan-100 active:scale-[0.98]">
+                Dev tools
+              </button>
+            ) : null}
+
+            <button onClick={onLogout} className="mt-3 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-left text-sm font-bold text-zinc-400 active:scale-[0.98]">
+              Exit account
+            </button>
+          </motion.aside>
+          <button aria-label="Close menu" onClick={onClose} className="absolute inset-y-0 right-0 w-[14%]" />
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
+  );
+}
+
+function SideMenuItem({ item, active, onClick }) {
+  return (
+    <button onClick={onClick} className={`rounded-2xl border px-3 py-3 text-left transition active:scale-[0.98] ${active ? "border-white/20 bg-white text-zinc-950" : "border-white/10 bg-white/[0.045] text-white"}`}>
+      <div className="flex items-center gap-3">
+        <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-black ${active ? "bg-zinc-950 text-white" : "bg-black/30 text-zinc-300"}`}>{item.icon}</span>
+        <div className="min-w-0">
+          <p className="text-sm font-black">{item.label}</p>
+          <p className={`mt-0.5 truncate text-xs ${active ? "text-zinc-600" : "text-zinc-500"}`}>{item.body}</p>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function DailyOsPage({ pageKey, status, loading, error, token, onRefresh }) {
+  const [todayData, setTodayData] = useState(null);
+  const [planData, setPlanData] = useState(null);
+  const [minimumDayData, setMinimumDayData] = useState(null);
+  const [doneData, setDoneData] = useState(null);
+  const [expandedDoneDate, setExpandedDoneDate] = useState(null);
+  const [dailyLoading, setDailyLoading] = useState(false);
+  const [dailyError, setDailyError] = useState("");
+  const [minimumDayLoading, setMinimumDayLoading] = useState(false);
+  const [minimumDayError, setMinimumDayError] = useState("");
+  const [taskTitle, setTaskTitle] = useState("");
+  const [taskNotes, setTaskNotes] = useState("");
+  const [planTitle, setPlanTitle] = useState("");
+  const [planNotes, setPlanNotes] = useState("");
+  const [planDate, setPlanDate] = useState("");
+  const [selectedTemplateId, setSelectedTemplateId] = useState(null);
+  const [editMinName, setEditMinName] = useState("");
+  const [editMinDescription, setEditMinDescription] = useState("");
+  const [newMinTaskTitle, setNewMinTaskTitle] = useState("");
+  const [newMinTaskNotes, setNewMinTaskNotes] = useState("");
+  const [newMinName, setNewMinName] = useState("");
+  const [newMinDescription, setNewMinDescription] = useState("");
+  const [rulePreset, setRulePreset] = useState("weekdays");
+  const [ruleDate, setRuleDate] = useState("");
+  const [ruleStartDate, setRuleStartDate] = useState("");
+  const [ruleEndDate, setRuleEndDate] = useState("");
+  const [ruleWeekdays, setRuleWeekdays] = useState(["monday"]);
+  const [ruleIntervalDays, setRuleIntervalDays] = useState("2");
+  const [ruleMonthlyDay, setRuleMonthlyDay] = useState("1");
+  const [rulePriority, setRulePriority] = useState("100");
+
+  const defaultMinDay = status?.default_minimum_day || null;
+  const counts = status?.counts || {};
+  const timezone = status?.timezone || getBrowserTimezone();
+  const today = todayData?.today || status?.today || "";
+  const tomorrow = planData?.tomorrow || addDaysToDateString(today, 1);
+  const templates = minimumDayData?.templates || (defaultMinDay ? [defaultMinDay] : []);
+  const activeMinimumDay = todayData?.minimum_day || minimumDayData?.active_template || defaultMinDay;
+  const selectedTemplate = templates.find((template) => template.id === selectedTemplateId) || activeMinimumDay || templates[0] || null;
+
+  useEffect(() => {
+    if (!token || !pageKey) return;
+    if (pageKey === "doittoday") loadTodayTasks();
+    if (pageKey === "plan") loadPlanTasks();
+    if (pageKey === "minday") loadMinimumDays();
+    if (pageKey === "done") loadDoneHistory();
+  }, [token, pageKey]);
+
+  useEffect(() => {
+    if (!planDate && tomorrow) setPlanDate(tomorrow);
+  }, [planDate, tomorrow]);
+
+  useEffect(() => {
+    if (!ruleDate && today) setRuleDate(today);
+    if (!ruleStartDate && today) setRuleStartDate(today);
+  }, [ruleDate, ruleStartDate, today]);
+
+  useEffect(() => {
+    if (!selectedTemplate && templates.length) {
+      setSelectedTemplateId(templates[0].id);
+    }
+  }, [selectedTemplate, templates.length]);
+
+  useEffect(() => {
+    if (!selectedTemplate) return;
+    setEditMinName(selectedTemplate.name || "");
+    setEditMinDescription(selectedTemplate.description || "");
+  }, [selectedTemplate?.id]);
+
+  async function requestDailyOs(method, path, body = null) {
+    const response = await axios({
+      method,
+      url: `${API_BASE_URL}${path}`,
+      data: body,
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return response.data;
+  }
+
+  async function loadTodayTasks() {
+    if (!token) return;
+    setDailyLoading(true);
+    setDailyError("");
+    try {
+      const tz = encodeURIComponent(getBrowserTimezone());
+      const response = await axios.get(`${API_BASE_URL}/daily-os/tasks/today?timezone=${tz}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setTodayData(response.data);
+    } catch (taskError) {
+      setDailyError(parseApiError(taskError, "Could not load today's tasks."));
+    } finally {
+      setDailyLoading(false);
+    }
+  }
+
+  async function loadPlanTasks() {
+    if (!token) return;
+    setDailyLoading(true);
+    setDailyError("");
+    try {
+      const tz = encodeURIComponent(getBrowserTimezone());
+      const response = await axios.get(`${API_BASE_URL}/daily-os/plan?timezone=${tz}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setPlanData(response.data);
+      if (!planDate) setPlanDate(response.data.tomorrow);
+    } catch (taskError) {
+      setDailyError(parseApiError(taskError, "Could not load the plan."));
+    } finally {
+      setDailyLoading(false);
+    }
+  }
+
+  async function loadDoneHistory() {
+    if (!token) return;
+    setDailyLoading(true);
+    setDailyError("");
+    try {
+      const tz = encodeURIComponent(getBrowserTimezone());
+      const response = await axios.get(`${API_BASE_URL}/daily-os/done?timezone=${tz}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setDoneData(response.data);
+      setExpandedDoneDate((current) => current || response.data.last_7_days?.find((day) => day.counts?.total > 0)?.local_date || response.data.today);
+    } catch (taskError) {
+      setDailyError(parseApiError(taskError, "Could not load Done history."));
+    } finally {
+      setDailyLoading(false);
+    }
+  }
+
+  async function loadMinimumDays() {
+    if (!token) return;
+    setMinimumDayLoading(true);
+    setMinimumDayError("");
+    try {
+      const tz = encodeURIComponent(getBrowserTimezone());
+      const response = await axios.get(`${API_BASE_URL}/daily-os/minimum-days?timezone=${tz}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setMinimumDayData(response.data);
+      const activeId = response.data.active_template?.id || response.data.templates?.[0]?.id || null;
+      setSelectedTemplateId((current) => current || activeId);
+    } catch (minError) {
+      setMinimumDayError(parseApiError(minError, "Could not load Minimum Day."));
+    } finally {
+      setMinimumDayLoading(false);
+    }
+  }
+
+  async function refreshDailyPage() {
+    await onRefresh?.();
+    if (pageKey === "doittoday") await loadTodayTasks();
+    if (pageKey === "plan") await loadPlanTasks();
+    if (pageKey === "minday") await loadMinimumDays();
+    if (pageKey === "done") await loadDoneHistory();
+  }
+
+  async function addTodayTask(event) {
+    event.preventDefault();
+    if (!taskTitle.trim()) return;
+    setDailyLoading(true);
+    setDailyError("");
+    try {
+      await requestDailyOs("post", "/daily-os/tasks", {
+        title: taskTitle,
+        notes: taskNotes || null,
+        task_date: today || null,
+        timezone: getBrowserTimezone(),
+        source: "manual",
+      });
+      setTaskTitle("");
+      setTaskNotes("");
+      await refreshDailyPage();
+      navigator.vibrate?.(25);
+    } catch (taskError) {
+      setDailyError(parseApiError(taskError, "Could not add this task."));
+    } finally {
+      setDailyLoading(false);
+    }
+  }
+
+  async function addPlannedTask(event) {
+    event.preventDefault();
+    if (!planTitle.trim() || !planDate) return;
+    setDailyLoading(true);
+    setDailyError("");
+    try {
+      await requestDailyOs("post", "/daily-os/tasks", {
+        title: planTitle,
+        notes: planNotes || null,
+        task_date: planDate,
+        timezone: getBrowserTimezone(),
+        source: "plan",
+      });
+      setPlanTitle("");
+      setPlanNotes("");
+      await refreshDailyPage();
+      navigator.vibrate?.(25);
+    } catch (taskError) {
+      setDailyError(parseApiError(taskError, "Could not plan this task."));
+    } finally {
+      setDailyLoading(false);
+    }
+  }
+
+  async function completeTask(task) {
+    setDailyLoading(true);
+    setDailyError("");
+    try {
+      const tz = encodeURIComponent(getBrowserTimezone());
+      await requestDailyOs("post", `/daily-os/tasks/${task.id}/complete?timezone=${tz}`);
+      await refreshDailyPage();
+      navigator.vibrate?.(35);
+    } catch (taskError) {
+      setDailyError(parseApiError(taskError, "Could not complete this task."));
+    } finally {
+      setDailyLoading(false);
+    }
+  }
+
+  async function dropTask(task) {
+    setDailyLoading(true);
+    setDailyError("");
+    try {
+      await requestDailyOs("post", `/daily-os/tasks/${task.id}/drop`);
+      await refreshDailyPage();
+      navigator.vibrate?.(20);
+    } catch (taskError) {
+      setDailyError(parseApiError(taskError, "Could not drop this task."));
+    } finally {
+      setDailyLoading(false);
+    }
+  }
+
+  async function moveTask(task, fallbackDate = tomorrow) {
+    const nextDate = window.prompt("Move task to date YYYY-MM-DD", fallbackDate || addDaysToDateString(today, 1));
+    if (!nextDate) return;
+    setDailyLoading(true);
+    setDailyError("");
+    try {
+      await requestDailyOs("post", `/daily-os/tasks/${task.id}/move`, { task_date: nextDate });
+      await refreshDailyPage();
+      navigator.vibrate?.(25);
+    } catch (taskError) {
+      setDailyError(parseApiError(taskError, "Could not move this task."));
+    } finally {
+      setDailyLoading(false);
+    }
+  }
+
+  async function deleteTask(task) {
+    const confirmed = window.confirm("Delete this task forever? This is the destructive action.");
+    if (!confirmed) return;
+    setDailyLoading(true);
+    setDailyError("");
+    try {
+      await axios.delete(`${API_BASE_URL}/daily-os/tasks/${task.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      await refreshDailyPage();
+      navigator.vibrate?.(15);
+    } catch (taskError) {
+      setDailyError(parseApiError(taskError, "Could not delete this task."));
+    } finally {
+      setDailyLoading(false);
+    }
+  }
+
+  function toggleRuleWeekday(day) {
+    setRuleWeekdays((current) => {
+      if (current.includes(day)) return current.filter((item) => item !== day);
+      return [...current, day];
+    });
+  }
+
+  function buildRecurrencePayload() {
+    const priority = Number(rulePriority || 100);
+    if (rulePreset === "specific_date") {
+      return { rule_type: "specific_date", priority, starts_on: ruleDate || null, rule_json: { date: ruleDate } };
+    }
+    if (rulePreset === "daily") {
+      return { rule_type: "daily", priority, starts_on: ruleStartDate || null, ends_on: ruleEndDate || null, rule_json: { start_date: ruleStartDate || null, until_date: ruleEndDate || null } };
+    }
+    if (rulePreset === "weekdays") {
+      return { rule_type: "weekdays", priority, starts_on: ruleStartDate || null, ends_on: ruleEndDate || null, rule_json: { start_date: ruleStartDate || null, until_date: ruleEndDate || null } };
+    }
+    if (rulePreset === "weekends") {
+      return { rule_type: "weekends", priority, starts_on: ruleStartDate || null, ends_on: ruleEndDate || null, rule_json: { start_date: ruleStartDate || null, until_date: ruleEndDate || null } };
+    }
+    if (rulePreset === "selected_weekdays") {
+      return { rule_type: "selected_weekdays", priority, starts_on: ruleStartDate || null, ends_on: ruleEndDate || null, rule_json: { weekdays: ruleWeekdays, start_date: ruleStartDate || null, until_date: ruleEndDate || null } };
+    }
+    if (rulePreset === "date_range") {
+      return { rule_type: "date_range", priority, starts_on: ruleStartDate || null, ends_on: ruleEndDate || null, rule_json: { start_date: ruleStartDate || null, end_date: ruleEndDate || null } };
+    }
+    if (rulePreset === "every_x_days") {
+      return { rule_type: "every_x_days", priority, starts_on: ruleStartDate || null, ends_on: ruleEndDate || null, rule_json: { interval_days: Number(ruleIntervalDays || 1), start_date: ruleStartDate || null, until_date: ruleEndDate || null } };
+    }
+    if (rulePreset === "every_2_weeks") {
+      return { rule_type: "weekly_interval", priority, starts_on: ruleStartDate || null, ends_on: ruleEndDate || null, rule_json: { interval_weeks: 2, weekdays: ruleWeekdays.length ? ruleWeekdays : ["monday"], start_date: ruleStartDate || null, until_date: ruleEndDate || null } };
+    }
+    if (rulePreset === "monthly") {
+      return { rule_type: "monthly", priority, starts_on: ruleStartDate || null, ends_on: ruleEndDate || null, rule_json: { day: Number(ruleMonthlyDay || 1), start_date: ruleStartDate || null, until_date: ruleEndDate || null } };
+    }
+    if (rulePreset === "first_monday") {
+      return { rule_type: "monthly_nth_weekday", priority, starts_on: ruleStartDate || null, ends_on: ruleEndDate || null, rule_json: { ordinal: 1, weekday: "monday", start_date: ruleStartDate || null, until_date: ruleEndDate || null } };
+    }
+    return { rule_type: "weekdays", priority, rule_json: {} };
+  }
+
+  async function createMinimumDayRule(event) {
+    event.preventDefault();
+    if (!selectedTemplate) return;
+    setMinimumDayLoading(true);
+    setMinimumDayError("");
+    try {
+      await requestDailyOs("post", `/daily-os/minimum-days/${selectedTemplate.id}/rules`, buildRecurrencePayload());
+      await refreshDailyPage();
+      navigator.vibrate?.(20);
+    } catch (minError) {
+      setMinimumDayError(parseApiError(minError, "Could not create recurrence rule."));
+    } finally {
+      setMinimumDayLoading(false);
+    }
+  }
+
+  async function deleteMinimumDayRule(rule) {
+    if (rule.rule_type === "default_always") {
+      window.alert("The default fallback rule cannot be deleted.");
+      return;
+    }
+    const confirmed = window.confirm("Remove this recurrence rule?");
+    if (!confirmed) return;
+    setMinimumDayLoading(true);
+    setMinimumDayError("");
+    try {
+      await axios.delete(`${API_BASE_URL}/daily-os/rules/${rule.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      await refreshDailyPage();
+    } catch (minError) {
+      setMinimumDayError(parseApiError(minError, "Could not remove recurrence rule."));
+    } finally {
+      setMinimumDayLoading(false);
+    }
+  }
+
+  async function saveMinimumDayTemplate(event) {
+    event.preventDefault();
+    if (!selectedTemplate || !editMinName.trim()) return;
+    setMinimumDayLoading(true);
+    setMinimumDayError("");
+    try {
+      await requestDailyOs("patch", `/daily-os/minimum-days/${selectedTemplate.id}`, {
+        name: editMinName,
+        description: editMinDescription,
+      });
+      await refreshDailyPage();
+      navigator.vibrate?.(20);
+    } catch (minError) {
+      setMinimumDayError(parseApiError(minError, "Could not save Minimum Day."));
+    } finally {
+      setMinimumDayLoading(false);
+    }
+  }
+
+  async function createMinimumDayTemplate(event) {
+    event.preventDefault();
+    if (!newMinName.trim()) return;
+    setMinimumDayLoading(true);
+    setMinimumDayError("");
+    try {
+      const created = await requestDailyOs("post", "/daily-os/minimum-days", {
+        name: newMinName,
+        description: newMinDescription,
+      });
+      setNewMinName("");
+      setNewMinDescription("");
+      setSelectedTemplateId(created.id);
+      await refreshDailyPage();
+      navigator.vibrate?.(20);
+    } catch (minError) {
+      setMinimumDayError(parseApiError(minError, "Could not create Minimum Day."));
+    } finally {
+      setMinimumDayLoading(false);
+    }
+  }
+
+  async function addMinimumDayTask(event) {
+    event.preventDefault();
+    if (!selectedTemplate || !newMinTaskTitle.trim()) return;
+    setMinimumDayLoading(true);
+    setMinimumDayError("");
+    try {
+      await requestDailyOs("post", `/daily-os/minimum-days/${selectedTemplate.id}/tasks`, {
+        title: newMinTaskTitle,
+        notes: newMinTaskNotes || null,
+      });
+      setNewMinTaskTitle("");
+      setNewMinTaskNotes("");
+      await refreshDailyPage();
+      navigator.vibrate?.(20);
+    } catch (minError) {
+      setMinimumDayError(parseApiError(minError, "Could not add Minimum Day task."));
+    } finally {
+      setMinimumDayLoading(false);
+    }
+  }
+
+  async function editMinimumDayTask(template, task) {
+    const nextTitle = window.prompt("Edit Minimum Day task", task.title);
+    if (nextTitle === null) return;
+    if (!nextTitle.trim()) return;
+    const nextNotes = window.prompt("Optional note", task.notes || "") ?? task.notes;
+    setMinimumDayLoading(true);
+    setMinimumDayError("");
+    try {
+      await requestDailyOs("patch", `/daily-os/minimum-days/${template.id}/tasks/${task.id}`, {
+        title: nextTitle,
+        notes: nextNotes || null,
+      });
+      await refreshDailyPage();
+    } catch (minError) {
+      setMinimumDayError(parseApiError(minError, "Could not edit Minimum Day task."));
+    } finally {
+      setMinimumDayLoading(false);
+    }
+  }
+
+  async function deleteMinimumDayTask(template, task) {
+    const confirmed = window.confirm("Remove this task from the Minimum Day template? Already injected tasks for today will stay unless you drop/delete them from Do it Today.");
+    if (!confirmed) return;
+    setMinimumDayLoading(true);
+    setMinimumDayError("");
+    try {
+      await axios.delete(`${API_BASE_URL}/daily-os/minimum-days/${template.id}/tasks/${task.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      await refreshDailyPage();
+    } catch (minError) {
+      setMinimumDayError(parseApiError(minError, "Could not remove Minimum Day task."));
+    } finally {
+      setMinimumDayLoading(false);
+    }
+  }
+
+  if (pageKey === "doittoday") {
+    const tasks = todayData?.tasks || [];
+    const minimumDayTasks = tasks.filter((task) => task.source === "minimum_day" && task.status !== "completed");
+    const plannedTasks = tasks.filter((task) => task.status !== "completed" && task.source !== "minimum_day");
+    const completedTasks = tasks.filter((task) => task.status === "completed");
+    const injection = todayData?.auto_injection || {};
+
+    return (
+      <div className="flex flex-1 flex-col gap-4">
+        <PageTitle eyebrow="Daily OS · Today" title="Do it Today" body="The practical list for your local day. Minimum Day appears automatically; Forge stays separate for now." />
+        {error ? <Notice tone="error">{error}</Notice> : null}
+        {dailyError ? <Notice tone="error">{dailyError}</Notice> : null}
+
+        <section className="rounded-[1.7rem] border border-cyan-300/20 bg-cyan-500/10 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.24em] text-cyan-100/80">Today</p>
+              <h3 className="mt-2 text-xl font-black">{today || "Local day"}</h3>
+              <p className="mt-2 text-sm leading-6 text-zinc-300">Midnight follows your browser timezone: {timezone}.</p>
+            </div>
+            <button onClick={refreshDailyPage} disabled={loading || dailyLoading} className="rounded-full border border-white/10 bg-black/20 px-3 py-2 text-xs font-black text-zinc-300 active:scale-95 disabled:opacity-60">
+              {loading || dailyLoading ? "Syncing" : "Sync"}
+            </button>
+          </div>
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            <InfoTile label="Planned" value={plannedTasks.length + minimumDayTasks.length} />
+            <InfoTile label="Done" value={completedTasks.length} />
+            <InfoTile label="Minimum" value={minimumDayTasks.length} />
+          </div>
+        </section>
+
+        {activeMinimumDay ? (
+          <section className="rounded-[1.7rem] border border-emerald-300/20 bg-emerald-500/10 p-4">
+            <p className="text-[10px] uppercase tracking-[0.24em] text-emerald-100/80">Automatic baseline</p>
+            <h3 className="mt-2 text-lg font-black">{activeMinimumDay.name}</h3>
+            <p className="mt-2 text-sm leading-6 text-zinc-300">{activeMinimumDay.description || "This Minimum Day is injected automatically when your local day starts."}</p>
+            <p className="mt-3 text-xs font-bold text-emerald-100/80">
+              {injection.created_count > 0 ? `${injection.created_count} Minimum Day tasks were added today.` : "Minimum Day already synced for today."}
+            </p>
+          </section>
+        ) : null}
+
+        <form onSubmit={addTodayTask} className="rounded-[1.7rem] border border-white/10 bg-white/[0.045] p-4">
+          <p className="text-[10px] uppercase tracking-[0.24em] text-zinc-500">Add task</p>
+          <input value={taskTitle} onChange={(event) => setTaskTitle(event.target.value)} placeholder="What has to happen today?" className="mt-3 w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm font-semibold text-white outline-none placeholder:text-zinc-600 focus:border-cyan-200/50" />
+          <textarea value={taskNotes} onChange={(event) => setTaskNotes(event.target.value)} placeholder="Optional note" rows={2} className="mt-2 w-full resize-none rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-cyan-200/50" />
+          <button disabled={!taskTitle.trim() || dailyLoading} className="mt-3 w-full rounded-2xl bg-white px-4 py-3 text-sm font-black text-zinc-950 active:scale-[0.98] disabled:opacity-50">Add to Today</button>
+        </form>
+
+        <TaskSection title="Minimum Day" empty="Your automatic baseline tasks will appear here." tasks={minimumDayTasks} tone="minimum">
+          {minimumDayTasks.map((task) => (
+            <DailyTaskCard key={task.id} task={task} onComplete={completeTask} onDrop={dropTask} onMove={moveTask} onDelete={deleteTask} />
+          ))}
+        </TaskSection>
+
+        <TaskSection title="Today’s tasks" empty="No practical moves yet. Add one small task." tasks={plannedTasks}>
+          {plannedTasks.map((task) => (
+            <DailyTaskCard key={task.id} task={task} onComplete={completeTask} onDrop={dropTask} onMove={moveTask} onDelete={deleteTask} />
+          ))}
+        </TaskSection>
+
+        <TaskSection title="Completed today" empty="Completed tasks will appear here." tasks={completedTasks} muted>
+          {completedTasks.map((task) => (
+            <DailyTaskCard key={task.id} task={task} onMove={moveTask} onDelete={deleteTask} completed />
+          ))}
+        </TaskSection>
+      </div>
+    );
+  }
+
+  if (pageKey === "plan") {
+    const tomorrowTasks = planData?.tomorrow_tasks || [];
+    const nextTasks = planData?.next_7_days || [];
+    const laterTasks = planData?.later || [];
+
+    return (
+      <div className="flex flex-1 flex-col gap-4">
+        <PageTitle eyebrow="Daily OS · Future" title="Plan" body="A clean queue for tasks that should appear on future days." />
+        {error ? <Notice tone="error">{error}</Notice> : null}
+        {dailyError ? <Notice tone="error">{dailyError}</Notice> : null}
+
+        <section className="rounded-[1.7rem] border border-violet-300/20 bg-violet-500/10 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.24em] text-violet-100/80">Upcoming queue</p>
+              <h3 className="mt-2 text-xl font-black">Tomorrow · Next 7 days · Later</h3>
+              <p className="mt-2 text-sm leading-6 text-zinc-300">Recurrence controls arrive after the core task flow. For now, plan one task for one date.</p>
+            </div>
+            <button onClick={refreshDailyPage} disabled={loading || dailyLoading} className="rounded-full border border-white/10 bg-black/20 px-3 py-2 text-xs font-black text-zinc-300 active:scale-95 disabled:opacity-60">
+              {loading || dailyLoading ? "Syncing" : "Sync"}
+            </button>
+          </div>
+        </section>
+
+        <form onSubmit={addPlannedTask} className="rounded-[1.7rem] border border-white/10 bg-white/[0.045] p-4">
+          <p className="text-[10px] uppercase tracking-[0.24em] text-zinc-500">Add future task</p>
+          <input value={planTitle} onChange={(event) => setPlanTitle(event.target.value)} placeholder="What should be waiting for you?" className="mt-3 w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm font-semibold text-white outline-none placeholder:text-zinc-600 focus:border-violet-200/50" />
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <input type="date" value={planDate || tomorrow || ""} onChange={(event) => setPlanDate(event.target.value)} className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm font-semibold text-white outline-none focus:border-violet-200/50" />
+            <button type="button" onClick={() => setPlanDate(tomorrow)} className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3 text-xs font-black text-zinc-300 active:scale-[0.98]">Tomorrow</button>
+          </div>
+          <textarea value={planNotes} onChange={(event) => setPlanNotes(event.target.value)} placeholder="Optional note" rows={2} className="mt-2 w-full resize-none rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-violet-200/50" />
+          <button disabled={!planTitle.trim() || !planDate || dailyLoading} className="mt-3 w-full rounded-2xl bg-white px-4 py-3 text-sm font-black text-zinc-950 active:scale-[0.98] disabled:opacity-50">Add to Plan</button>
+        </form>
+
+        <PlanSection title="Tomorrow" subtitle={planData?.tomorrow} tasks={tomorrowTasks} onComplete={completeTask} onDrop={dropTask} onMove={moveTask} onDelete={deleteTask} />
+        <PlanSection title="Next 7 days" subtitle={`Until ${planData?.next_7_end || "—"}`} tasks={nextTasks} onComplete={completeTask} onDrop={dropTask} onMove={moveTask} onDelete={deleteTask} />
+        <PlanSection title="Later" subtitle="Beyond the next 7 days" tasks={laterTasks} onComplete={completeTask} onDrop={dropTask} onMove={moveTask} onDelete={deleteTask} />
+      </div>
+    );
+  }
+
+  if (pageKey === "minday") {
+    return (
+      <div className="flex flex-1 flex-col gap-4">
+        <PageTitle eyebrow="Daily OS · Baseline" title="Minimum Day" body="Define the intrusive baseline. It appears automatically in Do it Today at the start of your local day." />
+        {error ? <Notice tone="error">{error}</Notice> : null}
+        {minimumDayError ? <Notice tone="error">{minimumDayError}</Notice> : null}
+
+        <section className="rounded-[1.7rem] border border-emerald-300/20 bg-emerald-500/10 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.24em] text-emerald-100/80">Automatic rule</p>
+              <h3 className="mt-2 text-xl font-black">Your day gets a baseline by default.</h3>
+              <p className="mt-2 text-sm leading-6 text-zinc-300">Specific recurrence rules now override the default. If nothing matches, THE MINIMUM DAY is injected automatically. No manual apply button.</p>
+            </div>
+            <button onClick={refreshDailyPage} disabled={loading || minimumDayLoading} className="rounded-full border border-white/10 bg-black/20 px-3 py-2 text-xs font-black text-zinc-300 active:scale-95 disabled:opacity-60">
+              {loading || minimumDayLoading ? "Syncing" : "Sync"}
+            </button>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <InfoTile label="Today" value={minimumDayData?.today || status?.today || "—"} />
+            <InfoTile label="Timezone" value={minimumDayData?.timezone || timezone} />
+          </div>
+        </section>
+
+        <section className="rounded-[1.7rem] border border-white/10 bg-white/[0.045] p-4">
+          <p className="text-[10px] uppercase tracking-[0.24em] text-zinc-500">Templates</p>
+          <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+            {templates.map((template) => (
+              <button key={template.id} onClick={() => setSelectedTemplateId(template.id)} className={`shrink-0 rounded-2xl border px-3 py-3 text-left active:scale-95 ${selectedTemplate?.id === template.id ? "border-emerald-200/50 bg-emerald-400/10 text-white" : "border-white/10 bg-black/20 text-zinc-400"}`}>
+                <p className="text-xs font-black">{template.name}</p>
+                <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.15em] text-zinc-500">{template.is_default ? "Default" : `${template.recurrence_rules?.length || 0} rules`} · {template.task_count} tasks</p>
+              </button>
+            ))}
+          </div>
+        </section>
+
+        {selectedTemplate ? (
+          <form onSubmit={saveMinimumDayTemplate} className="rounded-[1.7rem] border border-white/10 bg-white/[0.045] p-4">
+            <p className="text-[10px] uppercase tracking-[0.24em] text-zinc-500">Edit selected Minimum Day</p>
+            <input value={editMinName} onChange={(event) => setEditMinName(event.target.value)} className="mt-3 w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm font-semibold text-white outline-none placeholder:text-zinc-600 focus:border-emerald-200/50" />
+            <textarea value={editMinDescription} onChange={(event) => setEditMinDescription(event.target.value)} rows={3} placeholder="What does this kind of day mean?" className="mt-2 w-full resize-none rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-emerald-200/50" />
+            <button disabled={!editMinName.trim() || minimumDayLoading} className="mt-3 w-full rounded-2xl bg-white px-4 py-3 text-sm font-black text-zinc-950 active:scale-[0.98] disabled:opacity-50">Save Minimum Day</button>
+          </form>
+        ) : null}
+
+        {selectedTemplate ? (
+          <section className="rounded-[1.7rem] border border-emerald-300/15 bg-emerald-400/[0.06] p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.24em] text-emerald-100/70">Schedule</p>
+                <h3 className="mt-2 text-lg font-black">When should this Minimum Day take over?</h3>
+                <p className="mt-2 text-sm leading-6 text-zinc-400">Rules are powerful like a calendar, but shown as clean presets. Lower priority wins; default fallback stays at 1000.</p>
+              </div>
+              <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[10px] font-black text-zinc-400">{selectedTemplate.recurrence_rules?.length || 0}</span>
+            </div>
+            <div className="mt-3 grid gap-2">
+              {(selectedTemplate.recurrence_rules || []).length ? selectedTemplate.recurrence_rules.map((rule) => (
+                <RecurrenceRuleCard key={rule.id} rule={rule} onDelete={() => deleteMinimumDayRule(rule)} />
+              )) : <p className="rounded-2xl border border-white/10 bg-black/20 px-3 py-4 text-sm text-zinc-500">No specific rules yet. The default Minimum Day still covers unmatched days.</p>}
+            </div>
+            <form onSubmit={createMinimumDayRule} className="mt-3 rounded-2xl border border-white/10 bg-black/20 p-3">
+              <select value={rulePreset} onChange={(event) => setRulePreset(event.target.value)} className="w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm font-semibold text-white outline-none focus:border-emerald-200/50">
+                <option value="specific_date">Specific date</option>
+                <option value="daily">Daily</option>
+                <option value="weekdays">Weekdays</option>
+                <option value="weekends">Weekends</option>
+                <option value="selected_weekdays">Selected weekdays</option>
+                <option value="date_range">Date range</option>
+                <option value="every_x_days">Every X days</option>
+                <option value="every_2_weeks">Every 2 weeks</option>
+                <option value="monthly">Monthly</option>
+                <option value="first_monday">First Monday of month</option>
+              </select>
+
+              {(rulePreset === "specific_date") ? (
+                <input type="date" value={ruleDate || today || ""} onChange={(event) => setRuleDate(event.target.value)} className="mt-2 w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm font-semibold text-white outline-none focus:border-emerald-200/50" />
+              ) : null}
+
+              {rulePreset !== "specific_date" ? (
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <input type="date" value={ruleStartDate || today || ""} onChange={(event) => setRuleStartDate(event.target.value)} className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm font-semibold text-white outline-none focus:border-emerald-200/50" />
+                  <input type="date" value={ruleEndDate || ""} onChange={(event) => setRuleEndDate(event.target.value)} className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm font-semibold text-white outline-none focus:border-emerald-200/50" />
+                </div>
+              ) : null}
+
+              {(rulePreset === "selected_weekdays" || rulePreset === "every_2_weeks") ? (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"].map((day) => (
+                    <button key={day} type="button" onClick={() => toggleRuleWeekday(day)} className={`rounded-full border px-3 py-2 text-[11px] font-black active:scale-95 ${ruleWeekdays.includes(day) ? "border-emerald-200/50 bg-emerald-300/20 text-emerald-100" : "border-white/10 bg-white/[0.04] text-zinc-500"}`}>{day.slice(0, 3)}</button>
+                  ))}
+                </div>
+              ) : null}
+
+              {rulePreset === "every_x_days" ? (
+                <input type="number" min="1" value={ruleIntervalDays} onChange={(event) => setRuleIntervalDays(event.target.value)} placeholder="Every X days" className="mt-2 w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm font-semibold text-white outline-none focus:border-emerald-200/50" />
+              ) : null}
+
+              {rulePreset === "monthly" ? (
+                <input type="number" min="1" max="31" value={ruleMonthlyDay} onChange={(event) => setRuleMonthlyDay(event.target.value)} placeholder="Day of month" className="mt-2 w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm font-semibold text-white outline-none focus:border-emerald-200/50" />
+              ) : null}
+
+              <div className="mt-2 grid grid-cols-[1fr_auto] gap-2">
+                <input type="number" min="1" value={rulePriority} onChange={(event) => setRulePriority(event.target.value)} placeholder="Priority" className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm font-semibold text-white outline-none focus:border-emerald-200/50" />
+                <button disabled={minimumDayLoading} className="rounded-2xl border border-emerald-200/30 bg-emerald-400/15 px-4 py-3 text-sm font-black text-emerald-100 active:scale-[0.98] disabled:opacity-50">Add Rule</button>
+              </div>
+            </form>
+          </section>
+        ) : null}
+
+        {minimumDayData?.preview?.length ? (
+          <section className="rounded-[1.7rem] border border-white/10 bg-white/[0.045] p-4">
+            <p className="text-[10px] uppercase tracking-[0.24em] text-zinc-500">Next 14 days preview</p>
+            <div className="mt-3 grid gap-2">
+              {minimumDayData.preview.slice(0, 7).map((item) => (
+                <div key={item.local_date} className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/20 px-3 py-3">
+                  <div>
+                    <p className="text-sm font-black text-white">{item.weekday} · {item.local_date}</p>
+                    <p className="mt-1 text-xs text-zinc-500">{item.rule_label}</p>
+                  </div>
+                  <span className="rounded-full border border-emerald-200/20 bg-emerald-400/10 px-2.5 py-1 text-[10px] font-black text-emerald-100">{item.template_name}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {selectedTemplate ? (
+          <section className="rounded-[1.7rem] border border-white/10 bg-white/[0.045] p-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-[10px] uppercase tracking-[0.24em] text-zinc-500">Tasks inside {selectedTemplate.name}</p>
+              <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[10px] font-black text-zinc-400">{selectedTemplate.tasks?.length || 0}</span>
+            </div>
+            <div className="mt-3 grid gap-2">
+              {(selectedTemplate.tasks || []).length ? selectedTemplate.tasks.map((task) => (
+                <MinimumDayTaskCard key={task.id} task={task} onEdit={() => editMinimumDayTask(selectedTemplate, task)} onDelete={() => deleteMinimumDayTask(selectedTemplate, task)} />
+              )) : <p className="rounded-2xl border border-white/10 bg-black/20 px-3 py-4 text-sm text-zinc-500">No baseline tasks yet.</p>}
+            </div>
+            <form onSubmit={addMinimumDayTask} className="mt-3 rounded-2xl border border-white/10 bg-black/20 p-3">
+              <input value={newMinTaskTitle} onChange={(event) => setNewMinTaskTitle(event.target.value)} placeholder="Add baseline task" className="w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm font-semibold text-white outline-none placeholder:text-zinc-600 focus:border-emerald-200/50" />
+              <textarea value={newMinTaskNotes} onChange={(event) => setNewMinTaskNotes(event.target.value)} placeholder="Optional note" rows={2} className="mt-2 w-full resize-none rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-emerald-200/50" />
+              <button disabled={!newMinTaskTitle.trim() || minimumDayLoading} className="mt-2 w-full rounded-2xl border border-emerald-200/30 bg-emerald-400/15 px-4 py-3 text-sm font-black text-emerald-100 active:scale-[0.98] disabled:opacity-50">Add to Minimum Day</button>
+            </form>
+          </section>
+        ) : null}
+
+        <form onSubmit={createMinimumDayTemplate} className="rounded-[1.7rem] border border-white/10 bg-black/25 p-4">
+          <p className="text-[10px] uppercase tracking-[0.24em] text-zinc-500">Create another Minimum Day</p>
+          <p className="mt-2 text-sm leading-6 text-zinc-400">Create specific Minimum Days, then attach clean calendar rules such as Thursdays, weekends, date ranges, every 2 weeks or first Monday.</p>
+          <input value={newMinName} onChange={(event) => setNewMinName(event.target.value)} placeholder="Travel Day, Thursday Training Day..." className="mt-3 w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm font-semibold text-white outline-none placeholder:text-zinc-600 focus:border-emerald-200/50" />
+          <textarea value={newMinDescription} onChange={(event) => setNewMinDescription(event.target.value)} placeholder="What should this day protect?" rows={2} className="mt-2 w-full resize-none rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-emerald-200/50" />
+          <button disabled={!newMinName.trim() || minimumDayLoading} className="mt-3 w-full rounded-2xl bg-white px-4 py-3 text-sm font-black text-zinc-950 active:scale-[0.98] disabled:opacity-50">Create Template</button>
+        </form>
+      </div>
+    );
+  }
+
+  if (pageKey === "done") {
+    const days = doneData?.last_7_days || [];
+    const totals = doneData?.totals || { planned: 0, completed: 0, moved: 0, dropped: 0, total: 0 };
+    const activeDay = days.find((day) => day.local_date === expandedDoneDate) || days[0] || null;
+
+    return (
+      <div className="flex flex-1 flex-col gap-4">
+        <PageTitle eyebrow="Daily OS · Record" title="Done" body="The last 7 local days as a practical action record. Completed, planned, moved, and dropped — no shame language." />
+        {error ? <Notice tone="error">{error}</Notice> : null}
+        {dailyError ? <Notice tone="error">{dailyError}</Notice> : null}
+
+        <section className="rounded-[1.7rem] border border-emerald-300/20 bg-emerald-500/10 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.24em] text-emerald-100/80">Last 7 days</p>
+              <h3 className="mt-2 text-xl font-black">Action record</h3>
+              <p className="mt-2 text-sm leading-6 text-zinc-300">Today follows your browser timezone: {doneData?.timezone || timezone}.</p>
+            </div>
+            <button onClick={refreshDailyPage} disabled={loading || dailyLoading} className="rounded-full border border-white/10 bg-black/20 px-3 py-2 text-xs font-black text-zinc-300 active:scale-95 disabled:opacity-60">
+              {loading || dailyLoading ? "Syncing" : "Sync"}
+            </button>
+          </div>
+          <div className="mt-4 grid grid-cols-4 gap-2">
+            <InfoTile label="Done" value={totals.completed || 0} />
+            <InfoTile label="Planned" value={totals.planned || 0} />
+            <InfoTile label="Moved" value={totals.moved || 0} />
+            <InfoTile label="Dropped" value={totals.dropped || 0} />
+          </div>
+        </section>
+
+        <section className="rounded-[1.7rem] border border-white/10 bg-white/[0.045] p-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[10px] uppercase tracking-[0.24em] text-zinc-500">Daily cards</p>
+            <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[10px] font-black text-zinc-400">tap a day</span>
+          </div>
+          <div className="mt-3 grid gap-2">
+            {days.length ? days.map((day) => (
+              <DoneDayCard key={day.local_date} day={day} expanded={expandedDoneDate === day.local_date} onToggle={() => setExpandedDoneDate((current) => current === day.local_date ? null : day.local_date)} />
+            )) : <p className="rounded-2xl border border-white/10 bg-black/20 px-3 py-4 text-sm text-zinc-500">No history yet.</p>}
+          </div>
+        </section>
+
+        {activeDay ? (
+          <section className="rounded-[1.7rem] border border-white/10 bg-black/25 p-4">
+            <p className="text-[10px] uppercase tracking-[0.24em] text-zinc-500">Open day</p>
+            <h3 className="mt-2 text-lg font-black text-white">{activeDay.weekday} · {activeDay.local_date}</h3>
+            <p className="mt-2 text-sm text-zinc-400">{activeDay.short_description}</p>
+            <div className="mt-3 grid gap-2">
+              {activeDay.tasks?.length ? activeDay.tasks.map((task) => <DoneTaskLine key={task.id} task={task} />) : <p className="rounded-2xl border border-white/10 bg-black/20 px-3 py-4 text-sm text-zinc-500">Nothing was planned here.</p>}
+            </div>
+          </section>
+        ) : null}
+
+        <section className="rounded-[1.7rem] border border-white/10 bg-white/[0.035] p-4">
+          <p className="text-[10px] uppercase tracking-[0.24em] text-zinc-500">Older than 7 days</p>
+          <div className="mt-3 grid gap-2">
+            <p className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3 text-sm text-zinc-400">{doneData?.older_strategy?.next || "Older days will become weekly summaries."}</p>
+            <p className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3 text-sm text-zinc-400">{doneData?.older_strategy?.later || "Older weeks will become monthly summaries."}</p>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  const page = {
+    done: {
+      eyebrow: "Daily OS · Record",
+      title: "Done",
+      body: "The past 7 days will show completed, planned, moved, and dropped counts with tap-to-open details.",
+      bullets: ["Last 7 days as daily cards", "Older days become weekly/monthly summaries", "No shame language"],
+    },
+  }[pageKey] || {
+    eyebrow: "Daily OS",
+    title: "Daily OS",
+    body: "Private execution pages are ready.",
+    bullets: [],
+  };
+
+  return (
+    <div className="flex flex-1 flex-col gap-4">
+      <PageTitle eyebrow={page.eyebrow} title={page.title} body={page.body} />
+      {error ? <Notice tone="error">{error}</Notice> : null}
+
+      <section className="rounded-[1.7rem] border border-cyan-300/20 bg-cyan-500/10 p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.24em] text-cyan-100/80">Private route</p>
+            <h3 className="mt-2 text-xl font-black">/{pageKey}</h3>
+            <p className="mt-2 text-sm leading-6 text-zinc-300">Today is calculated from your browser timezone.</p>
+          </div>
+          <button onClick={onRefresh} disabled={loading} className="rounded-full border border-white/10 bg-black/20 px-3 py-2 text-xs font-black text-zinc-300 active:scale-95 disabled:opacity-60">
+            {loading ? "Syncing" : "Sync"}
+          </button>
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <InfoTile label="Today" value={status?.today || "—"} />
+          <InfoTile label="Timezone" value={status?.timezone || getBrowserTimezone()} />
+        </div>
+      </section>
+
+      <section className="rounded-[1.7rem] border border-white/10 bg-white/[0.045] p-4">
+        <p className="text-[10px] uppercase tracking-[0.24em] text-zinc-500">This page will support</p>
+        <div className="mt-3 grid gap-2">
+          {page.bullets.map((bullet) => (
+            <div key={bullet} className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3 text-sm font-semibold text-zinc-300">{bullet}</div>
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-[1.7rem] border border-white/10 bg-black/25 p-4">
+        <p className="text-[10px] uppercase tracking-[0.24em] text-zinc-500">Foundation status</p>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <InfoTile label="Tasks" value={counts.daily_tasks ?? 0} />
+          <InfoTile label="Today" value={counts.today_tasks ?? 0} />
+          <InfoTile label="Min Days" value={counts.minimum_day_templates ?? 0} />
+          <InfoTile label="Rules" value={counts.recurrence_rules ?? 0} />
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function TaskSection({ title, empty, tasks, children, muted = false, tone = "default" }) {
+  const shellClass = tone === "minimum" ? "border-emerald-300/20 bg-emerald-500/10" : muted ? "border-white/10 bg-black/20" : "border-white/10 bg-white/[0.045]";
+  return (
+    <section className={`rounded-[1.7rem] border p-4 ${shellClass}`}>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[10px] uppercase tracking-[0.24em] text-zinc-500">{title}</p>
+        <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[10px] font-black text-zinc-400">{tasks.length}</span>
+      </div>
+      <div className="mt-3 grid gap-2">
+        {tasks.length ? children : <p className="rounded-2xl border border-white/10 bg-black/20 px-3 py-4 text-sm text-zinc-500">{empty}</p>}
+      </div>
+    </section>
+  );
+}
+
+function DailyTaskCard({ task, onComplete, onDrop, onMove, onDelete, completed = false }) {
+  const source = task.source === "minimum_day" ? "Minimum Day" : task.source === "plan" ? "Planned" : task.source === "feed_challenge" ? "Feed challenge" : "Manual";
+  return (
+    <article className={`rounded-2xl border p-3 ${completed ? "border-emerald-300/20 bg-emerald-400/10" : task.source === "minimum_day" ? "border-emerald-300/20 bg-black/25" : "border-white/10 bg-black/25"}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className={`text-sm font-black ${completed ? "text-emerald-100 line-through decoration-emerald-200/60" : "text-white"}`}>{task.title}</p>
+          {task.notes ? <p className="mt-1 text-xs leading-5 text-zinc-400">{task.notes}</p> : null}
+          <p className="mt-2 text-[10px] font-bold uppercase tracking-[0.15em] text-zinc-600">{source} · {task.task_date}</p>
+        </div>
+        <span className={`rounded-full px-2 py-1 text-[10px] font-black ${completed ? "bg-emerald-200 text-zinc-950" : task.source === "minimum_day" ? "bg-emerald-300/15 text-emerald-100" : "bg-zinc-800 text-zinc-300"}`}>{completed ? "Done" : source}</span>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {!completed ? <button onClick={() => onComplete(task)} className="rounded-full bg-white px-3 py-2 text-xs font-black text-zinc-950 active:scale-95">Complete</button> : null}
+        <button onClick={() => onMove(task)} className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-2 text-xs font-black text-zinc-300 active:scale-95">Move</button>
+        {!completed ? <button onClick={() => onDrop(task)} className="rounded-full border border-amber-300/20 bg-amber-400/10 px-3 py-2 text-xs font-black text-amber-100 active:scale-95">Drop</button> : null}
+        <button onClick={() => onDelete(task)} className="rounded-full border border-red-300/20 bg-red-500/10 px-3 py-2 text-xs font-black text-red-100 active:scale-95">Delete</button>
+      </div>
+    </article>
+  );
+}
+
+function RecurrenceRuleCard({ rule, onDelete }) {
+  const canDelete = rule.rule_type !== "default_always";
+  return (
+    <article className="rounded-2xl border border-white/10 bg-black/25 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-black text-white">{rule.label}</p>
+          <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.15em] text-zinc-600">Priority {rule.priority} · {rule.is_active ? "Active" : "Paused"}</p>
+          {(rule.starts_on || rule.ends_on) ? <p className="mt-1 text-xs text-zinc-500">{rule.starts_on || "Any start"} → {rule.ends_on || "No end"}</p> : null}
+        </div>
+        <span className="rounded-full bg-emerald-300/15 px-2 py-1 text-[10px] font-black text-emerald-100">Rule</span>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button onClick={onDelete} disabled={!canDelete} className="rounded-full border border-red-300/20 bg-red-500/10 px-3 py-2 text-xs font-black text-red-100 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40">{canDelete ? "Remove" : "Default"}</button>
+      </div>
+    </article>
+  );
+}
+
+function DoneDayCard({ day, expanded, onToggle }) {
+  const counts = day.counts || {};
+  const hasTasks = (counts.total || 0) > 0;
+  return (
+    <button onClick={onToggle} className={`rounded-2xl border p-3 text-left transition active:scale-[0.98] ${expanded ? "border-emerald-200/40 bg-emerald-400/10" : "border-white/10 bg-black/20"}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-black text-white">{day.weekday} · {day.local_date}</p>
+          <p className="mt-1 text-xs leading-5 text-zinc-400">{day.short_description}</p>
+        </div>
+        <span className={`rounded-full px-2.5 py-1 text-[10px] font-black ${hasTasks ? "bg-emerald-300/15 text-emerald-100" : "bg-zinc-800 text-zinc-400"}`}>{hasTasks ? `${counts.total} tasks` : "empty"}</span>
+      </div>
+      {expanded ? (
+        <div className="mt-3 grid grid-cols-4 gap-2">
+          <InfoTile label="Done" value={counts.completed || 0} />
+          <InfoTile label="Plan" value={counts.planned || 0} />
+          <InfoTile label="Move" value={counts.moved || 0} />
+          <InfoTile label="Drop" value={counts.dropped || 0} />
+        </div>
+      ) : null}
+    </button>
+  );
+}
+
+function DoneTaskLine({ task }) {
+  const statusMap = {
+    completed: "Done",
+    planned: "Planned",
+    moved: "Moved",
+    dropped: "Dropped",
+  };
+  const sourceMap = {
+    minimum_day: "Minimum Day",
+    plan: "Planned",
+    feed_challenge: "Feed challenge",
+    manual: "Manual",
+  };
+  const tone = task.status === "completed" ? "border-emerald-300/20 bg-emerald-400/10 text-emerald-100" : task.status === "moved" ? "border-blue-300/20 bg-blue-400/10 text-blue-100" : task.status === "dropped" ? "border-amber-300/20 bg-amber-400/10 text-amber-100" : "border-white/10 bg-black/20 text-zinc-300";
+  return (
+    <article className={`rounded-2xl border p-3 ${tone}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className={`text-sm font-black ${task.status === "completed" ? "line-through decoration-emerald-200/60" : ""}`}>{task.title}</p>
+          {task.notes ? <p className="mt-1 text-xs leading-5 text-zinc-400">{task.notes}</p> : null}
+          <p className="mt-2 text-[10px] font-bold uppercase tracking-[0.15em] text-zinc-600">{sourceMap[task.source] || task.source} · {task.task_date}</p>
+          {task.status === "moved" && task.moved_to_date ? <p className="mt-1 text-xs text-blue-100/70">Moved to {task.moved_to_date}</p> : null}
+        </div>
+        <span className="rounded-full border border-white/10 bg-black/20 px-2 py-1 text-[10px] font-black">{statusMap[task.status] || task.status}</span>
+      </div>
+    </article>
+  );
+}
+
+function MinimumDayTaskCard({ task, onEdit, onDelete }) {
+  return (
+    <article className="rounded-2xl border border-white/10 bg-black/25 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-black text-white">{task.title}</p>
+          {task.notes ? <p className="mt-1 text-xs leading-5 text-zinc-400">{task.notes}</p> : null}
+        </div>
+        <span className="rounded-full bg-emerald-300/15 px-2 py-1 text-[10px] font-black text-emerald-100">Baseline</span>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button onClick={onEdit} className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-2 text-xs font-black text-zinc-300 active:scale-95">Edit</button>
+        <button onClick={onDelete} className="rounded-full border border-red-300/20 bg-red-500/10 px-3 py-2 text-xs font-black text-red-100 active:scale-95">Remove</button>
+      </div>
+    </article>
+  );
+}
+
+function PlanSection({ title, subtitle, tasks, onComplete, onDrop, onMove, onDelete }) {
+  return (
+    <section className="rounded-[1.7rem] border border-white/10 bg-white/[0.045] p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.24em] text-zinc-500">{title}</p>
+          <p className="mt-1 text-xs font-semibold text-zinc-500">{subtitle}</p>
+        </div>
+        <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[10px] font-black text-zinc-400">{tasks.length}</span>
+      </div>
+      <div className="mt-3 grid gap-2">
+        {tasks.length ? tasks.map((task) => (
+          <DailyTaskCard key={task.id} task={task} onComplete={onComplete} onMove={onMove} onDrop={onDrop} onDelete={onDelete} />
+        )) : <p className="rounded-2xl border border-white/10 bg-black/20 px-3 py-4 text-sm text-zinc-500">Nothing here yet.</p>}
+      </div>
+    </section>
+  );
+}
+
+function addDaysToDateString(dateString, amount) {
+  if (!dateString) return "";
+  const date = new Date(`${dateString}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return "";
+  date.setDate(date.getDate() + amount);
+  return date.toISOString().slice(0, 10);
+}
+
+function DevToolsPage({ status, loading, error, smoke, smokeLoading, smokeError, dailyOsQa, dailyOsQaLoading, dailyOsQaError, isDev, onRefresh, onRunSmoke, onRunDailyOsQa, onBack }) {
   const counts = status?.counts || {};
   const systems = status?.systems || {};
   const notes = status?.dev_notes || [];
   const smokeSummary = smoke?.summary || null;
   const smokeChecks = smoke?.checks || [];
+  const dailyOsQaSummary = dailyOsQa?.summary || null;
+  const dailyOsQaChecks = dailyOsQa?.checks || [];
+  const dailyOsQaNotes = dailyOsQa?.notes || [];
   const [qaState, setQaState] = useState(() => getStoredQaState());
 
   const completedQa = STEP26_QA_ITEMS.filter((item) => qaState[item.id]).length;
@@ -2338,13 +3545,17 @@ function DevToolsPage({ status, loading, error, smoke, smokeLoading, smokeError,
 
       {error ? <Notice tone="error">{error}</Notice> : null}
       {smokeError ? <Notice tone="error">{smokeError}</Notice> : null}
+      {dailyOsQaError ? <Notice tone="error">{dailyOsQaError}</Notice> : null}
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <button onClick={onRefresh} disabled={loading} className="rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-4 font-black text-white active:scale-[0.98] disabled:opacity-60">
           {loading ? "Refreshing..." : "Refresh status"}
         </button>
         <button onClick={onRunSmoke} disabled={smokeLoading} className="rounded-2xl bg-white px-4 py-4 font-black text-zinc-950 active:scale-[0.98] disabled:opacity-60">
           {smokeLoading ? "Running..." : "Run smoke check"}
+        </button>
+        <button onClick={onRunDailyOsQa} disabled={dailyOsQaLoading} className="rounded-2xl border border-emerald-200/20 bg-emerald-300/15 px-4 py-4 font-black text-emerald-50 active:scale-[0.98] disabled:opacity-60">
+          {dailyOsQaLoading ? "Running..." : "Run Daily OS QA"}
         </button>
       </div>
 
@@ -2371,6 +3582,39 @@ function DevToolsPage({ status, loading, error, smoke, smokeLoading, smokeError,
           ))}
         </div>
         {smokeChecks.length === 0 && !smokeLoading ? <SmallEmptyState text="No smoke check run yet." /> : null}
+      </section>
+
+      <section className="rounded-[1.7rem] border border-emerald-300/20 bg-emerald-500/10 p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.24em] text-emerald-100/80">Step 39 · Daily OS QA</p>
+            <h3 className="mt-2 text-xl font-black">{dailyOsQa?.status === "pass" ? "Daily OS integration passes." : dailyOsQaLoading ? "Checking Daily OS..." : "Run before Daily OS deploy."}</h3>
+            <p className="mt-2 text-sm leading-6 text-zinc-300">Checks Do it Today, Plan, Minimum Day injection, recurrence preview, Done history, and no duplicate baseline tasks.</p>
+          </div>
+          {dailyOsQaSummary ? <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-black text-emerald-100">{dailyOsQaSummary.passed}/{dailyOsQaSummary.checks}</span> : null}
+        </div>
+
+        {dailyOsQaSummary ? (
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            <InfoTile label="Pass" value={dailyOsQaSummary.passed} />
+            <InfoTile label="Warn" value={dailyOsQaSummary.warnings} />
+            <InfoTile label="Fail" value={dailyOsQaSummary.failures} />
+          </div>
+        ) : null}
+
+        <div className="mt-4 grid gap-2">
+          {dailyOsQaChecks.map((check) => (
+            <SmokeCheckRow key={check.key} check={check} />
+          ))}
+        </div>
+        {dailyOsQaChecks.length === 0 && !dailyOsQaLoading ? <SmallEmptyState text="No Daily OS QA run yet." /> : null}
+        {dailyOsQaNotes.length ? (
+          <div className="mt-4 grid gap-2">
+            {dailyOsQaNotes.map((note) => (
+              <p key={note} className="rounded-2xl border border-emerald-200/10 bg-black/20 px-3 py-3 text-xs leading-5 text-zinc-300">{note}</p>
+            ))}
+          </div>
+        ) : null}
       </section>
 
       <section className="rounded-[1.7rem] border border-violet-300/20 bg-violet-500/10 p-4">

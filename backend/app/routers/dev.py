@@ -6,6 +6,11 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.db.session import get_db
 from app.models import (
+    DailyOsInjectionLog,
+    DailyOsRecurrenceRule,
+    DailyTask,
+    MinimumDayTemplate,
+    MinimumDayTemplateTask,
     Card,
     Character,
     DailyPromise,
@@ -51,6 +56,11 @@ def build_counts(db: Session) -> dict[str, int]:
         "daily_promises": db.query(DailyPromise).count(),
         "promise_completions": db.query(PromiseCompletion).count(),
         "insights": db.query(InsightUnlock).count(),
+        "daily_tasks": db.query(DailyTask).count(),
+        "minimum_day_templates": db.query(MinimumDayTemplate).count(),
+        "minimum_day_template_tasks": db.query(MinimumDayTemplateTask).count(),
+        "daily_os_recurrence_rules": db.query(DailyOsRecurrenceRule).count(),
+        "daily_os_injection_logs": db.query(DailyOsInjectionLog).count(),
     }
 
 
@@ -98,6 +108,7 @@ def dev_status(
             "evolution": "enabled",
             "jots": "enabled",
             "dev_smoke_check": "enabled",
+            "daily_os": "foundation_enabled",
         },
         "dev_notes": [
             "This route is not used by normal product UI.",
@@ -179,6 +190,14 @@ def dev_smoke_check(
         counts["feed_cards"] >= 100,
         f"Found {counts['feed_cards']} active feed cards. Step 27 expects at least 100.",
     )
+
+    add_check(
+        "daily_os_foundation",
+        "Daily OS foundation tables exist",
+        "daily_tasks" in counts and "minimum_day_templates" in counts,
+        f"Daily OS counts available: tasks={counts.get('daily_tasks', 0)}, minimum templates={counts.get('minimum_day_templates', 0)}.",
+    )
+
     add_check(
         "promise_templates",
         "Forge has at least 7 suggestions",

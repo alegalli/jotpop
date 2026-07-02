@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     app_name: str = "JotPop API"
-    app_version: str = "0.26.0"
+    app_version: str = "0.33.0"
 
     database_url: str
 

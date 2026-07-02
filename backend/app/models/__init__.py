@@ -1,3 +1,4 @@
+from app.models.daily_os import DailyOsInjectionLog, DailyOsRecurrenceRule, DailyTask, MinimumDayTemplate, MinimumDayTemplateTask
 from app.models.achievement import Achievement, CharacterAchievement
 from app.models.card import Card, CardInteraction
 from app.models.character import Character
@@ -8,6 +9,11 @@ from app.models.signal import Signal
 from app.models.user import User
 
 __all__ = [
+    "DailyOsInjectionLog",
+    "DailyOsRecurrenceRule",
+    "DailyTask",
+    "MinimumDayTemplate",
+    "MinimumDayTemplateTask",
     "Achievement",
     "Card",
     "CardInteraction",
